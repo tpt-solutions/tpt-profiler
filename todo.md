@@ -98,11 +98,11 @@
 - [x] Serde round-trip tests; versioned schema constant
 
 ### 1.2 Configuration (§40)
-- [ ] `tpt-profiler.toml` schema: `[project]`, `[profiling]`, `[benchmarks]`, `[ci]`, `[scoring]`
-- [ ] Config discovery (cwd upward, workspace root)
-- [ ] Defaults + validation with good error messages
-- [ ] CLI flag override precedence (flags > config > defaults)
-- [ ] Config golden tests
+- [x] `tpt-profiler.toml` schema: `[project]`, `[profiling]`, `[benchmarks]`, `[ci]`, `[scoring]`
+- [x] Config discovery (cwd upward, workspace root)
+- [x] Defaults + validation with good error messages
+- [x] CLI flag override precedence (flags > config > defaults)
+- [x] Config golden tests
 
 ### 1.3 Discovery (§7)
 - [ ] Cargo workspace discovery via `cargo_metadata`
