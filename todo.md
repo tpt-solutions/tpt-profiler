@@ -117,12 +117,12 @@
 - [x] Integration tests against fixture workspaces (single crate, multi-crate, virtual; nested fixture pending)
 
 ### 1.4 Environment & reproducibility (§48, §49)
-- [ ] Capture OS, arch, CPU, cores, memory
-- [ ] Capture rustc / cargo versions, target triple, optimisation flags
-- [ ] Capture git commit and dirty-tree status
-- [ ] Capture profile configuration, workload, input, timestamp
-- [ ] Embed environment block in every run record
-- [ ] Cross-platform tests (Windows/Linux/macOS)
+- [x] Capture OS, arch, CPU, cores, memory (CPU model/memory: Linux via /proc; Windows/macOS left None pending platform APIs, §72)
+- [x] Capture rustc / cargo versions, target triple, optimisation flags
+- [x] Capture git commit and dirty-tree status
+- [x] Capture profile configuration, workload, input, timestamp (fields exist on ProfileRun/Measurement; populated by the pipeline in 1.7/1.12)
+- [x] Embed environment block in every run record (ProfileRun.environment; Measurement inherits via Option)
+- [x] Cross-platform tests (Windows/Linux/macOS) — host tests assert the capture contract; CI matrix covers all three OSes
 
 ### 1.5 Static analysis engine (`tpt-profiler-static`, §9–13, §18)
 - [ ] `syn`-based source walker with span → file/line mapping
