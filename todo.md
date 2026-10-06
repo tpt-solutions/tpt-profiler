@@ -302,7 +302,26 @@
 - [ ] Shared-opportunity detection across repos (§34)
 - [ ] Ecosystem priority weighting with configurable shared-infra value (§60)
 - [ ] Ecosystem report (§33 format)
-- [ ] Performance tests for scanning ~100 repos
+- [ ] Performance tests for scanning 300+ repos, with a memory and time budget
+- [ ] Keep aggregate output readable at 300+ repos (top-N, grouping by category, shared-primitive detection)
+
+#### 2.8a GitHub clone → analyse → store → confirm-delete workflow
+- [ ] `ecosystem --github <user|org>`: list repos via `gh`/git (explicit opt-in; the network step is never implicit, §70)
+- [ ] Repo filters: skip non-Rust, forks, archived; include/exclude globs
+- [ ] Shallow-clone into a managed cache dir (configurable location)
+- [ ] Mark tool-created clones with a marker file
+- [ ] Analyse each clone, static-only by default
+- [ ] Runtime/bench on clones is opt-in only, sandboxed or confirmed (executes untrusted build.rs/benches)
+- [ ] Store results per repo, keyed by repo + commit SHA, in `.tpt-profiler/`, independent of the clone
+- [ ] Regenerate reports from stored results without the source present
+- [ ] Cleanup step: list clones with sizes, delete only on confirmation (interactive prompt; `--yes` / `--keep` for non-interactive)
+- [ ] Deletion safety: only tool-created clones, never user checkouts, refuse paths outside the managed cache dir
+- [ ] Batch processing with a configurable disk budget, so 300+ clones are never on disk at once
+- [ ] Resume after interruption: skip repos already analysed at the same SHA
+- [ ] Bounded parallelism, per-repo timeouts, partial-failure tolerance (one broken repo never aborts the run)
+- [ ] Auth: reuse the user's `gh`/git credentials, never store tokens; handle rate limits
+- [ ] Handle repos with no `Cargo.toml`, workspaces inside subdirectories, and name collisions
+- [ ] Tests with mocked `gh`/git and a fixture of small local repos
 
 ### 2.9 Quality
 - [ ] Incremental static analysis cache (§72)
