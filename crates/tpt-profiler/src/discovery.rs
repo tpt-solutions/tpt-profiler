@@ -20,19 +20,7 @@ use tpt_profiler_model::hierarchy::{
 /// Single-crate projects are modelled as a one-member workspace; virtual
 /// workspaces (no root package) list their members.
 pub fn discover_repository(start: &Path) -> Result<(Repository, PathBuf), Error> {
-    let manifest = if start.is_file() {
-        start.to_path_buf()
-    } else {
-        start.join("Cargo.toml")
-    };
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .manifest_path(&manifest)
-        .exec()
-        .map_err(|error| {
-            Error::Discovery(DiscoveryError::MetadataFailed {
-                message: error.to_string(),
-            })
-        })?;
+    let metadata = load_metadata(start)?;
 
     let workspace_root = metadata.workspace_root.clone();
     let member_ids: std::collections::HashSet<_> = metadata.workspace_members.iter().collect();
@@ -65,6 +53,24 @@ pub fn discover_repository(start: &Path) -> Result<(Repository, PathBuf), Error>
         projects: vec![project],
     };
     Ok((repository, root.to_path_buf()))
+}
+
+/// Loads `cargo metadata` for the workspace at or above `start`
+/// (spec §68: cargo is the evidence provider for project structure).
+pub fn load_metadata(start: &Path) -> Result<cargo_metadata::Metadata, Error> {
+    let manifest = if start.is_file() {
+        start.to_path_buf()
+    } else {
+        start.join("Cargo.toml")
+    };
+    cargo_metadata::MetadataCommand::new()
+        .manifest_path(&manifest)
+        .exec()
+        .map_err(|error| {
+            Error::Discovery(DiscoveryError::MetadataFailed {
+                message: error.to_string(),
+            })
+        })
 }
 
 /// Maps one cargo package onto [`CrateInfo`].

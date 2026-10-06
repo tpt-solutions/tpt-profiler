@@ -145,14 +145,14 @@
 - [x] Parse-failure handling (continue, report ParseError, don't abort the run)
 
 ### 1.6 Dependency analysis (§18)
-- [ ] Dependency counts: direct, transitive, build, dev
-- [ ] Duplicate dependency versions
-- [ ] Feature usage and unused-feature heuristics
-- [ ] Large dependency detection
-- [ ] Platform-specific and optional dependencies
-- [ ] Separate runtime-cost vs compile-time-cost reasoning
-- [ ] Recommendations: dependency reduction, feature reduction, replacement, internalisation
-- [ ] Tests on fixture lockfiles
+- [x] Dependency counts: direct, transitive, build, dev (`deps::analyze` over `cargo metadata`; transitive-only count via name normalisation)
+- [x] Duplicate dependency versions (dash/underscore-normalised grouping, High confidence findings)
+- [x] Feature usage and unused-feature heuristics (resolved feature surface ≥ 8 → feature-reduction hint; resolved features come from the resolve graph)
+- [x] Large dependency detection (build-dependencies with ≥ 10 unique transitive crates, memoised DFS with cycle guard)
+- [x] Platform-specific and optional dependencies (target-gated + optional counts)
+- [x] Separate runtime-cost vs compile-time-cost reasoning (normal = runtime, build = compile-time, dev = test-only; build-dep findings phrased as compile-time cost)
+- [x] Recommendations: dependency reduction, feature reduction, replacement, internalisation (in finding texts, per §18)
+- [x] Tests on fixture lockfiles (synthetic metadata JSON for parse determinism; real fixtures exercise the live `cargo metadata` path via discovery tests)
 
 ### 1.7 Runtime & benchmark execution (`tpt-profiler-runtime`, `tpt-profiler-bench`, §8.2–8.3, §23, §50)
 - [ ] Workload model: name, input, duration, repetitions (§23)

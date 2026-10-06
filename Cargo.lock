@@ -343,6 +343,7 @@ dependencies = [
  "cargo_metadata",
  "ignore",
  "serde",
+ "serde_json",
  "toml",
  "tpt-profiler-model",
 ]

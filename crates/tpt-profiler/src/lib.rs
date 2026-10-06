@@ -14,6 +14,7 @@
 //! pipeline lands with the MVP (spec §62).
 
 pub mod config;
+pub mod deps;
 pub mod discovery;
 pub mod environment;
 
