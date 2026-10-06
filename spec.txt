@@ -2,7 +2,7 @@
 
 **Repository:** `tpt-profiler`
 **Organisation:** TPT Solutions
-**License:** MIT
+**License:** MIT OR Apache-2.0
 **Language:** Rust
 **Edition:** Rust 2024
 **Status:** Design Specification
@@ -2004,8 +2004,13 @@ If future cloud or AI analysis is added, it MUST be explicit and opt-in.
 All original TPT code should be:
 
 ```text
-MIT
+MIT OR Apache-2.0
 ```
+
+Dual-licensing provides the simplicity of MIT together with the explicit
+patent grant of Apache 2.0, which matters for a tool that documents
+vectorisation and other patent-sensitive optimisation techniques.
+Contributions are licensed under both licences.
 
 Dependencies must be reviewed for:
 
@@ -2013,7 +2018,10 @@ Dependencies must be reviewed for:
 * patent concerns;
 * redistribution requirements.
 
-The project should favour dependencies compatible with the broader TPT licensing philosophy.
+The project should favour dependencies compatible with the broader TPT
+licensing philosophy. Apache-2.0-only dependencies are rejected
+(enforced via `cargo deny`); only MIT, dual MIT/Apache-2.0, and other
+approved permissive licences are allowed.
 
 ---
 

@@ -1,0 +1,20 @@
+[package]
+name = "tpt-profiler-cli"
+description = "Command-line interface for tpt-profiler (spec §41)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[[bin]]
+name = "tpt-profiler"
+path = "src/main.rs"
+
+[dependencies]
+tpt-profiler.workspace = true
+
+[lints]
+workspace = true

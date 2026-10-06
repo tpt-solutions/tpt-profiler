@@ -1,0 +1,62 @@
+# cargo-deny configuration.
+#
+# Policy highlights (see DESIGN.md §9, §11):
+# * Apache-2.0 is deliberately ABSENT from the licence allow list: dual
+#   MIT/Apache-2.0 crates pass via their MIT clause, Apache-only crates
+#   are rejected (locked project decision).
+# * Network-capable crates are banned outright: tpt-profiler is local-only
+#   (spec §70) with no telemetry and no network I/O.
+
+[graph]
+all-features = true
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "MIT-0",
+    # Other approved permissive licences (documented exceptions):
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "BSL-1.0",
+    "CC0-1.0",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = [
+    # Network-capable crates — the privacy stance is enforced, not just
+    # promised (spec §70). Extend this list when reviewing dependencies.
+    { name = "reqwest" },
+    { name = "ureq" },
+    { name = "hyper" },
+    { name = "hyper-tls" },
+    { name = "hyper-rustls" },
+    { name = "curl" },
+    { name = "curl-sys" },
+    { name = "attohttpc" },
+    { name = "isahc" },
+    { name = "surf" },
+    { name = "tungstenite" },
+    { name = "tokio" },
+    { name = "async-std" },
+    { name = "smol" },
+    { name = "quinn" },
+    { name = "git2" },
+    { name = "libssh2-sys" },
+    { name = "openssh" },
+]
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

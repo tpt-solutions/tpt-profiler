@@ -1,0 +1,6 @@
+# Development toolchain. MSRV (1.85) is enforced separately in CI via
+# `rust-version`; this file pins what contributors build with day-to-day.
+[toolchain]
+channel = "stable"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

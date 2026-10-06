@@ -18,60 +18,60 @@
 ## Phase 0 — Foundations & Infrastructure
 
 ### 0.1 Repository & licensing
-- [ ] Initialise git repository and default branch
-- [ ] Add `.gitignore` (target/, `.tpt-profiler/` runtime artefacts as appropriate)
-- [ ] Add `LICENSE-MIT` (copyright TPT Solutions)
-- [ ] Add `LICENSE-APACHE` (Apache-2.0 text)
-- [ ] Add top-level `LICENSE` / README licence section explaining the dual licence and the contribution clause
-- [ ] Set SPDX `license = "MIT OR Apache-2.0"` in every `Cargo.toml`
-- [ ] Update `spec.txt` header and §71 from "MIT" to "MIT OR Apache-2.0"
-- [ ] Add `CONTRIBUTING.md` (contributions licensed under both)
-- [ ] Add `SECURITY.md`, `CODE_OF_CONDUCT.md`
-- [ ] Add `CHANGELOG.md` (Keep a Changelog format)
-- [ ] Add `DESIGN.md` (derived from spec architecture, §5–6)
-- [ ] Add `README.md` skeleton
+- [x] Initialise git repository and default branch
+- [x] Add `.gitignore` (target/, `.tpt-profiler/` runtime artefacts as appropriate)
+- [x] Add `LICENSE-MIT` (copyright TPT Solutions)
+- [x] Add `LICENSE-APACHE` (Apache-2.0 text)
+- [x] Add top-level `LICENSE` / README licence section explaining the dual licence and the contribution clause
+- [x] Set SPDX `license = "MIT OR Apache-2.0"` in every `Cargo.toml`
+- [x] Update `spec.txt` header and §71 from "MIT" to "MIT OR Apache-2.0"
+- [x] Add `CONTRIBUTING.md` (contributions licensed under both)
+- [x] Add `SECURITY.md`, `CODE_OF_CONDUCT.md`
+- [x] Add `CHANGELOG.md` (Keep a Changelog format)
+- [x] Add `DESIGN.md` (derived from spec architecture, §5–6)
+- [x] Add `README.md` skeleton
 
 ### 0.2 Workspace skeleton (§61)
-- [ ] Root `Cargo.toml` workspace (resolver 3, edition 2024, shared `[workspace.package]` and `[workspace.dependencies]`)
-- [ ] Create `crates/tpt-profiler` (core library)
-- [ ] Create `crates/tpt-profiler-cli`
-- [ ] Create `crates/tpt-profiler-model` (`no_std`-capable, §73)
-- [ ] Create `crates/tpt-profiler-static`
-- [ ] Create `crates/tpt-profiler-runtime`
-- [ ] Create `crates/tpt-profiler-bench`
-- [ ] Create `crates/tpt-profiler-memory`
-- [ ] Create `crates/tpt-profiler-build`
-- [ ] Create `crates/tpt-profiler-opportunity`
-- [ ] Create `crates/tpt-profiler-report`
-- [ ] Create `tests/` directory (integration tests and fixtures)
-- [ ] Define crate dependency direction (model ← everything; no cycles); document in DESIGN.md
-- [ ] Reserve crate names on crates.io (verify availability)
+- [x] Root `Cargo.toml` workspace (resolver 3, edition 2024, shared `[workspace.package]` and `[workspace.dependencies]`)
+- [x] Create `crates/tpt-profiler` (core library)
+- [x] Create `crates/tpt-profiler-cli`
+- [x] Create `crates/tpt-profiler-model` (`no_std`-capable, §73)
+- [x] Create `crates/tpt-profiler-static`
+- [x] Create `crates/tpt-profiler-runtime`
+- [x] Create `crates/tpt-profiler-bench`
+- [x] Create `crates/tpt-profiler-memory`
+- [x] Create `crates/tpt-profiler-build`
+- [x] Create `crates/tpt-profiler-opportunity`
+- [x] Create `crates/tpt-profiler-report`
+- [x] Create `tests/` directory (integration tests and fixtures)
+- [x] Define crate dependency direction (model ← everything; no cycles); document in DESIGN.md
+- [ ] Reserve crate names on crates.io (verified available 2026-10-07; actual reservation needs a crates.io login)
 
 ### 0.3 Tooling & quality gates
-- [ ] Decide and pin MSRV; add `rust-version` and `rust-toolchain.toml`
-- [ ] `rustfmt.toml`
-- [ ] Workspace `[lints]` (clippy pedantic subset, `unsafe_code = "forbid"` by default)
-- [ ] `deny.toml`: allow only MIT / Apache-2.0 dual / other approved permissive licences; reject Apache-only, GPL, etc.
-- [ ] cargo-deny checks: licences, bans, advisories, sources
-- [ ] Review each direct dependency for licence, patents, redistribution (§71)
-- [ ] Dependency policy doc: how to add a dependency
-- [ ] `cargo-audit` / advisory check in CI
-- [ ] GitHub Actions CI: fmt, clippy, test on Windows + Linux + macOS
-- [ ] CI: MSRV build job
-- [ ] CI: `no_std` build check for `tpt-profiler-model`
-- [ ] CI: cargo-deny job
-- [ ] CI: docs build (`cargo doc`, deny warnings)
-- [ ] Dependabot / Renovate config
-- [ ] Pre-commit or `just`/`xtask` helper for local checks
+- [x] Decide and pin MSRV; add `rust-version` and `rust-toolchain.toml`
+- [x] `rustfmt.toml`
+- [x] Workspace `[lints]` (clippy pedantic subset, `unsafe_code = "forbid"` by default)
+- [x] `deny.toml`: allow only MIT / Apache-2.0 dual / other approved permissive licences; reject Apache-only, GPL, etc.
+- [x] cargo-deny checks: licences, bans, advisories, sources
+- [x] Review each direct dependency for licence, patents, redistribution (§71)
+- [x] Dependency policy doc: how to add a dependency
+- [x] `cargo-audit` / advisory check in CI
+- [x] GitHub Actions CI: fmt, clippy, test on Windows + Linux + macOS
+- [x] CI: MSRV build job
+- [x] CI: `no_std` build check for `tpt-profiler-model`
+- [x] CI: cargo-deny job
+- [x] CI: docs build (`cargo doc`, deny warnings)
+- [x] Dependabot / Renovate config
+- [x] Pre-commit or `just`/`xtask` helper for local checks
 
 ### 0.4 Core foundations
-- [ ] Structured error taxonomy (§74): DiscoveryError, ConfigurationError, ProfilingError, BenchmarkError, AnalysisError, ToolUnavailable, ParseError, SerializationError, EnvironmentError
-- [ ] Distinguish "no opportunity detected" from "profiling failed" in result types
-- [ ] Logging/tracing approach (local only)
-- [ ] Schema versioning strategy for all persisted/emitted JSON (§69)
-- [ ] Deterministic ID generation scheme for opportunities (e.g. `SIMD-00042`)
-- [ ] Decide stable-API surface vs internal (scoring formula must not be an API contract, §27)
-- [ ] Privacy stance enforced: no network, no telemetry by default (§70); add a CI check for network crates
+- [x] Structured error taxonomy (§74): DiscoveryError, ConfigurationError, ProfilingError, BenchmarkError, AnalysisError, ToolUnavailable, ParseError, SerializationError, EnvironmentError
+- [x] Distinguish "no opportunity detected" from "profiling failed" in result types
+- [x] Logging/tracing approach (local only)
+- [x] Schema versioning strategy for all persisted/emitted JSON (§69)
+- [x] Deterministic ID generation scheme for opportunities (e.g. `SIMD-00042`)
+- [x] Decide stable-API surface vs internal (scoring formula must not be an API contract, §27)
+- [x] Privacy stance enforced: no network, no telemetry by default (§70); add a CI check for network crates
 
 ---
 

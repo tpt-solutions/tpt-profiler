@@ -1,0 +1,18 @@
+[package]
+name = "tpt-profiler"
+description = "Core orchestration library for tpt-profiler: discovery → analysis → evidence → opportunities → priority → report (spec §5)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["profiling", "performance", "optimisation"]
+categories = ["development-tools"]
+
+[dependencies]
+tpt-profiler-model.workspace = true
+
+[lints]
+workspace = true

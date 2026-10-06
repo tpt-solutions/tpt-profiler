@@ -1,0 +1,16 @@
+[package]
+name = "tpt-profiler-build"
+description = "Build-time analysis: clean/incremental compile times, per-crate and dependency build cost (spec §8.6, §20)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+tpt-profiler-model.workspace = true
+
+[lints]
+workspace = true

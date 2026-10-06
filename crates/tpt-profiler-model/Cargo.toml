@@ -1,0 +1,26 @@
+[package]
+name = "tpt-profiler-model"
+description = "Shared, no_std-capable data model for tpt-profiler: errors, schema versioning, measurements, and opportunities."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords = ["profiling", "performance", "optimisation"]
+categories = ["development-tools", "no-std"]
+
+[features]
+default = []
+std = ["serde?/std"]
+serde = ["dep:serde"]
+
+[dependencies]
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

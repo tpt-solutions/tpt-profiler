@@ -1,0 +1,16 @@
+[package]
+name = "tpt-profiler-bench"
+description = "Benchmark analysis: cargo bench execution and Criterion result ingestion (spec §8.3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+tpt-profiler-model.workspace = true
+
+[lints]
+workspace = true

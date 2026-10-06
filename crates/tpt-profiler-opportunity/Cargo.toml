@@ -1,0 +1,16 @@
+[package]
+name = "tpt-profiler-opportunity"
+description = "Opportunity engine: evidence-to-opportunity conversion, impact/confidence/effort/risk estimation, and priority scoring (spec §25-35, §51)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+tpt-profiler-model.workspace = true
+
+[lints]
+workspace = true

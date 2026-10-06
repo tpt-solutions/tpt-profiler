@@ -1,0 +1,30 @@
+# Licences
+
+`tpt-profiler` is dual-licensed under the following two licences:
+
+* **MIT** — [LICENSE-MIT](LICENSE-MIT)
+* **Apache License 2.0** — [LICENSE-APACHE](LICENSE-APACHE)
+
+You may use, modify, and redistribute this software under the terms of
+**either** licence, at your option.
+
+## Why dual-licensing?
+
+The MIT licence keeps the code simple to consume and redistribute.
+The Apache 2.0 licence additionally provides an explicit patent grant,
+which matters for a tool that documents vectorisation (SIMD) and other
+patent-sensitive optimisation techniques.
+
+## Contributing
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work is licensed under **both** the MIT and
+the Apache 2.0 licence, without any additional terms or conditions.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Dependency policy
+
+Dependencies must be compatible with distribution under both licences.
+Apache-2.0-only dependencies are rejected via `cargo deny`
+(see `deny.toml`); only MIT, dual MIT/Apache-2.0, and other approved
+permissive licences are allowed.
