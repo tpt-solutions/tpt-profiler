@@ -1,0 +1,24 @@
+# Rust build output
+/target/
+**/target/
+
+# Profiler runtime artefacts (keep baselines opt-in)
+/.tpt-profiler/cache/
+/.tpt-profiler/tmp/
+
+# Profiling outputs
+*.profraw
+*.profdata
+perf.data*
+flamegraph.svg
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local env
+.env
+*.log

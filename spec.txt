@@ -1,0 +1,2340 @@
+# tpt-profiler
+
+**Repository:** `tpt-profiler`
+**Organisation:** TPT Solutions
+**License:** MIT
+**Language:** Rust
+**Edition:** Rust 2024
+**Status:** Design Specification
+**Version:** 0.1.0
+
+---
+
+## 1. Purpose
+
+`tpt-profiler` is a repository and workload optimisation analysis system for identifying, measuring, ranking, and explaining opportunities to improve software performance, efficiency, and architecture.
+
+The primary purpose is not simply to identify slow functions.
+
+The primary purpose is to answer:
+
+> **Which parts of this project are worth optimising next, why, by how much, and with what level of confidence?**
+
+`tpt-profiler` combines:
+
+* static code analysis
+* runtime profiling
+* benchmark analysis
+* allocation analysis
+* memory analysis
+* CPU analysis
+* SIMD opportunity detection
+* parallelism analysis
+* I/O analysis
+* dependency analysis
+* binary-size analysis
+* compile-time analysis
+* WASM analysis
+* architecture analysis
+* optimisation opportunity scoring
+* engineering-effort estimation
+* confidence estimation
+* prioritised recommendations
+
+The system should ultimately be capable of profiling an entire software ecosystem rather than a single executable.
+
+---
+
+# 2. Core Philosophy
+
+Traditional profilers answer:
+
+> "What is consuming resources?"
+
+`tpt-profiler` should answer:
+
+> "What should I change?"
+
+There is an important distinction.
+
+A function consuming 40% of CPU time is not necessarily the best optimisation target.
+
+For example:
+
+* it may already be near optimal;
+* the workload may rarely execute;
+* optimising it may have little user-visible impact;
+* the change may be extremely difficult;
+* the code may be safety-critical;
+* a different upstream bottleneck may make the optimisation irrelevant;
+* an algorithmic improvement elsewhere may produce a much larger benefit.
+
+Therefore every detected issue should become an **Opportunity**, rather than merely a measurement.
+
+---
+
+# 3. Goals
+
+## 3.1 Primary Goals
+
+`tpt-profiler` MUST:
+
+1. Profile Rust projects.
+2. Analyse Cargo workspaces.
+3. Analyse individual crates.
+4. Analyse binaries and libraries.
+5. Analyse benchmarks where available.
+6. Detect measurable performance bottlenecks.
+7. Detect likely optimisation opportunities.
+8. Rank opportunities by expected value.
+9. Explain why an opportunity was detected.
+10. Estimate confidence.
+11. Estimate implementation difficulty.
+12. Avoid recommending optimisation where evidence is insufficient.
+13. Produce machine-readable results.
+14. Produce human-readable reports.
+15. Support repeatable profiling runs.
+16. Compare profiling runs over time.
+17. operate independently of TPT-specific repositories.
+
+---
+
+## 3.2 Secondary Goals
+
+The system SHOULD eventually:
+
+* analyse C/C++;
+* analyse Python;
+* analyse WASM;
+* analyse GPU workloads;
+* integrate with CI;
+* integrate with `tpt-weave`;
+* integrate with `tpt-readme`;
+* integrate with `tpt-cargo-vitals`;
+* integrate with `tpt-telos`;
+* understand `tpt-simd`;
+* automatically generate optimisation plans;
+* track whether recommendations actually produced improvements.
+
+---
+
+# 4. Non-Goals
+
+`tpt-profiler` is not intended to initially become:
+
+* a replacement for `perf`;
+* a replacement for Criterion;
+* a replacement for Valgrind;
+* a compiler;
+* a linter;
+* a formal verification system;
+* an automatic code rewriting system;
+* an AI coding agent;
+* a general observability platform.
+
+It should integrate with existing specialist tooling where appropriate.
+
+The project should **aggregate evidence rather than reinvent every profiling technology**.
+
+---
+
+# 5. High-Level Architecture
+
+```text
+                         ┌─────────────────────┐
+                         │   Target Repository │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Project Discovery   │
+                         └──────────┬──────────┘
+                                    │
+             ┌──────────────────────┼──────────────────────┐
+             ▼                      ▼                      ▼
+      Static Analysis        Runtime Analysis       Build Analysis
+             │                      │                      │
+             └──────────────────────┼──────────────────────┘
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Evidence Collection │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Opportunity Engine  │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Priority Calculator │
+                         └──────────┬──────────┘
+                                    │
+                  ┌─────────────────┼─────────────────┐
+                  ▼                 ▼                 ▼
+             CLI Report        JSON Output        CI Output
+                  │                 │                 │
+                  └─────────────────┼─────────────────┘
+                                    ▼
+                              Engineering Queue
+```
+
+---
+
+# 6. Conceptual Data Model
+
+The fundamental unit of `tpt-profiler` is an **Opportunity**.
+
+The hierarchy is:
+
+```text
+Repository
+    │
+    ├── Project
+    │      │
+    │      ├── Crate
+    │      │      │
+    │      │      ├── Module
+    │      │      │      │
+    │      │      │      └── Function
+    │      │      │
+    │      │      └── Dependency
+    │      │
+    │      └── Workload
+    │
+    └── Profile Run
+            │
+            ├── Measurement
+            └── Opportunity
+```
+
+---
+
+# 7. Repository Discovery
+
+`tpt-profiler` MUST be capable of discovering project structure automatically.
+
+For Rust repositories it SHOULD inspect:
+
+* `Cargo.toml`;
+* `Cargo.lock`;
+* workspace members;
+* binaries;
+* libraries;
+* examples;
+* benches;
+* tests;
+* build scripts;
+* feature flags;
+* target configuration;
+* profiles;
+* dependencies;
+* build dependencies;
+* dev dependencies.
+
+Example:
+
+```bash
+tpt-profiler scan .
+```
+
+The tool should determine:
+
+```text
+Repository
+ └── Workspace
+      ├── crate-a
+      ├── crate-b
+      ├── crate-c
+      └── crate-d
+```
+
+---
+
+# 8. Profiling Modes
+
+`tpt-profiler` SHOULD provide several profiling modes.
+
+## 8.1 Static
+
+```bash
+tpt-profiler static
+```
+
+Analyses source without executing the application.
+
+---
+
+## 8.2 Runtime
+
+```bash
+tpt-profiler runtime
+```
+
+Runs workloads and collects runtime measurements.
+
+---
+
+## 8.3 Benchmark
+
+```bash
+tpt-profiler bench
+```
+
+Discovers and executes available benchmarks.
+
+---
+
+## 8.4 Memory
+
+```bash
+tpt-profiler memory
+```
+
+Focuses on:
+
+* allocations;
+* deallocations;
+* peak memory;
+* retained memory;
+* allocation frequency;
+* allocation sizes.
+
+---
+
+## 8.5 CPU
+
+```bash
+tpt-profiler cpu
+```
+
+Focuses on:
+
+* CPU time;
+* hotspots;
+* instruction counts;
+* cycles;
+* branch behaviour;
+* cache behaviour where available.
+
+---
+
+## 8.6 Build
+
+```bash
+tpt-profiler build
+```
+
+Analyses:
+
+* compile time;
+* incremental compilation;
+* dependency build cost;
+* binary size;
+* generated code;
+* feature combinations.
+
+---
+
+## 8.7 Full
+
+```bash
+tpt-profiler full
+```
+
+Runs all applicable analyses.
+
+---
+
+# 9. Static Analysis Engine
+
+The static analyser should identify patterns that are likely to create optimisation opportunities.
+
+It should not blindly label every pattern as a problem.
+
+Each finding should include evidence and confidence.
+
+---
+
+## 9.1 Allocation Detection
+
+Potential findings include:
+
+* repeated heap allocation;
+* allocation inside hot loops;
+* repeated `Vec` growth;
+* missing capacity reservation;
+* temporary collections;
+* unnecessary `String` creation;
+* repeated formatting;
+* boxing;
+* allocation-heavy iterator chains;
+* allocation-heavy error paths.
+
+Example:
+
+```rust
+for item in items {
+    let value = expensive_conversion(item);
+    process(value);
+}
+```
+
+Potential finding:
+
+```text
+Repeated allocation inside loop
+
+Confidence: Medium
+Potential impact: Medium
+```
+
+---
+
+# 10. Clone and Copy Analysis
+
+Identify potentially expensive:
+
+* `.clone()`;
+* deep copies;
+* repeated conversions;
+* unnecessary ownership transfers;
+* large value copies.
+
+The analyser MUST distinguish:
+
+```rust
+Arc<T>::clone()
+```
+
+from:
+
+```rust
+LargeStruct::clone()
+```
+
+because their performance characteristics are fundamentally different.
+
+---
+
+# 11. Data Structure Analysis
+
+Detect potential mismatches between workload and data structure.
+
+Examples:
+
+```text
+Vec used for repeated membership lookup
+HashMap used for tiny fixed collection
+String used where bytes are sufficient
+heap allocation used for fixed-size data
+linked structure used where contiguous storage is preferable
+```
+
+These findings should be recommendations, not automatic prescriptions.
+
+---
+
+# 12. SIMD Opportunity Detection
+
+`tpt-profiler` SHOULD identify workloads that may benefit from SIMD.
+
+Potential indicators:
+
+* repeated arithmetic;
+* independent operations;
+* fixed-width numerical loops;
+* image processing;
+* audio processing;
+* signal processing;
+* matrix operations;
+* codecs;
+* cryptographic primitives;
+* numerical transforms.
+
+Example:
+
+```text
+SIMD OPPORTUNITY
+
+Repository: tpt-cadence
+Function: transform_block
+
+Evidence:
+- 93% of operations are independent scalar arithmetic
+- contiguous input
+- fixed-width processing
+- no observable loop-carried dependency
+
+Potential benefit: HIGH
+Confidence: HIGH
+
+Suggested investigation:
+tpt-simd
+```
+
+`tpt-profiler` should not require `tpt-simd` to function.
+
+---
+
+# 13. Parallelism Detection
+
+Identify workloads potentially suitable for:
+
+* threads;
+* Rayon-style parallel iterators;
+* task parallelism;
+* pipeline parallelism;
+* GPU execution.
+
+Potential indicators:
+
+* independent iterations;
+* large datasets;
+* expensive per-item computation;
+* embarrassingly parallel workloads;
+* existing thread pools;
+* underutilised CPU cores.
+
+The tool must account for overhead.
+
+It should not recommend parallelisation of tiny workloads simply because iterations are independent.
+
+---
+
+# 14. Memory Analysis
+
+Memory profiling should consider:
+
+* peak RSS;
+* heap usage;
+* allocation count;
+* allocation size;
+* fragmentation;
+* object lifetime;
+* temporary allocations;
+* cache locality;
+* working-set size.
+
+Potential recommendations:
+
+```text
+Reduce temporary allocation
+Reserve collection capacity
+Reuse buffers
+Improve data locality
+Use compact representation
+Avoid unnecessary ownership conversion
+```
+
+---
+
+# 15. Cache Locality
+
+Where platform tooling permits, analyse:
+
+* cache misses;
+* memory access patterns;
+* structure layout;
+* contiguous vs scattered access;
+* working-set size.
+
+Potential recommendation:
+
+```text
+Structure-of-arrays representation may improve locality.
+```
+
+Such recommendations require lower confidence unless runtime evidence supports them.
+
+---
+
+# 16. I/O Analysis
+
+Detect:
+
+* excessive filesystem operations;
+* repeated reads;
+* small writes;
+* synchronous I/O in high-throughput workloads;
+* unnecessary serialisation;
+* repeated parsing;
+* unnecessary copying.
+
+Possible opportunity:
+
+```text
+Batch filesystem operations
+```
+
+or:
+
+```text
+Reuse parsed representation
+```
+
+---
+
+# 17. Serialisation Analysis
+
+Identify expensive:
+
+* JSON processing;
+* XML processing;
+* YAML processing;
+* binary encoding;
+* decoding;
+* repeated serialisation/deserialisation.
+
+Potential opportunities:
+
+* binary representation;
+* zero-copy parsing;
+* buffer reuse;
+* streaming;
+* avoiding redundant conversions.
+
+---
+
+# 18. Dependency Analysis
+
+Analyse the Cargo dependency graph.
+
+Measure:
+
+* dependency count;
+* transitive dependencies;
+* build dependencies;
+* feature usage;
+* duplicated dependencies;
+* large dependencies;
+* platform-specific dependencies;
+* optional dependencies.
+
+Potential recommendations:
+
+```text
+Dependency reduction
+Feature reduction
+Dependency replacement
+Internal implementation
+```
+
+This should distinguish between runtime cost and compile-time cost.
+
+---
+
+# 19. Binary Analysis
+
+Where supported, measure:
+
+* binary size;
+* section sizes;
+* debug information;
+* symbol counts;
+* duplicated code;
+* dependency contributions.
+
+Potential recommendations:
+
+* feature reduction;
+* LTO;
+* stripping;
+* code consolidation;
+* dependency reduction.
+
+---
+
+# 20. Compile-Time Analysis
+
+Compile-time profiling is important for large Rust workspaces.
+
+Measure:
+
+* clean build time;
+* incremental build time;
+* crate build time;
+* dependency build time;
+* proc-macro cost;
+* build-script cost.
+
+Output:
+
+```text
+BUILD ANALYSIS
+
+Clean build:       43.2s
+Incremental build:  3.8s
+
+Top contributors:
+
+1. crate-a       11.4s
+2. dependency-x   8.2s
+3. proc-macro-y   5.9s
+```
+
+---
+
+# 21. WASM Analysis
+
+For compatible projects, detect:
+
+* binary size;
+* unsupported dependencies;
+* allocation behaviour;
+* JavaScript boundary crossings;
+* SIMD availability;
+* unnecessary native assumptions.
+
+Potential recommendations:
+
+```text
+Reduce WASM binary size
+Avoid repeated JS boundary crossings
+Enable WASM SIMD
+Remove native-only dependency
+```
+
+---
+
+# 22. GPU Opportunity Detection
+
+GPU analysis should be considered a later capability.
+
+Potential indicators:
+
+* massively parallel numerical workloads;
+* image processing;
+* matrix operations;
+* simulation;
+* signal processing;
+* large vector operations.
+
+Potential result:
+
+```text
+GPU OPPORTUNITY
+
+Estimated parallelism: Very High
+CPU utilisation: High
+Workload size: Large
+Branch divergence: Low
+
+Recommendation:
+Investigate GPU implementation.
+```
+
+GPU recommendations should require strong evidence.
+
+---
+
+# 23. Workload Model
+
+A profile is only meaningful relative to a workload.
+
+`tpt-profiler` SHOULD therefore represent workloads explicitly.
+
+Example:
+
+```text
+Workload:
+    name: decode_1080p
+    input: sample.mp4
+    duration: 30s
+    repetitions: 10
+```
+
+This allows comparisons between runs.
+
+---
+
+# 24. Measurement Model
+
+Every measurement should contain:
+
+```text
+Metric
+Value
+Unit
+Source
+Timestamp
+Environment
+Workload
+Confidence
+```
+
+Example:
+
+```text
+CPU_TIME
+value: 1.482
+unit: seconds
+source: perf
+workload: decode_1080p
+```
+
+---
+
+# 25. Opportunity Model
+
+An opportunity should contain:
+
+```text
+ID
+Repository
+Component
+Category
+Description
+Evidence
+Expected Impact
+Confidence
+Effort
+Risk
+Generality
+Priority
+Suggested Action
+```
+
+Example:
+
+```text
+Opportunity:
+
+ID:
+  SIMD-00042
+
+Repository:
+  tpt-cadence
+
+Component:
+  mdct::transform
+
+Category:
+  SIMD
+
+Impact:
+  9/10
+
+Confidence:
+  9/10
+
+Effort:
+  5/10
+
+Risk:
+  3/10
+
+Generality:
+  8/10
+
+Priority:
+  86/100
+```
+
+---
+
+# 26. Optimisation Categories
+
+Initial categories SHOULD include:
+
+```text
+CPU
+SIMD
+Parallelism
+Memory
+Allocation
+Cache
+Algorithm
+Data Structure
+I/O
+Serialisation
+Dependency
+Binary Size
+Compile Time
+WASM
+GPU
+Architecture
+Concurrency
+```
+
+---
+
+# 27. Priority Engine
+
+The system must rank opportunities.
+
+A preliminary model:
+
+```text
+Priority =
+    Impact × Confidence × Generality
+    ---------------------------------
+          Effort × Risk
+```
+
+However, this formula should not be exposed as a permanent API contract.
+
+The scoring engine should be configurable.
+
+---
+
+# 28. Impact
+
+Impact estimates:
+
+```text
+1  negligible
+2  very low
+3  low
+4  modest
+5  moderate
+6  meaningful
+7  high
+8  very high
+9  major
+10 transformative
+```
+
+Impact may consider:
+
+* runtime;
+* memory;
+* latency;
+* throughput;
+* binary size;
+* compile time;
+* energy;
+* scalability.
+
+---
+
+# 29. Confidence
+
+Confidence represents how strongly the evidence supports the recommendation.
+
+```text
+Very Low
+Low
+Medium
+High
+Very High
+```
+
+Evidence hierarchy:
+
+```text
+Observed benchmark regression
+        ↓
+Runtime profile evidence
+        ↓
+Hardware counter evidence
+        ↓
+Static analysis + known pattern
+        ↓
+Heuristic
+```
+
+The system must clearly distinguish measured facts from predictions.
+
+---
+
+# 30. Effort
+
+Estimated engineering effort:
+
+```text
+Trivial
+Low
+Medium
+High
+Very High
+```
+
+Effort should consider:
+
+* implementation complexity;
+* testing requirements;
+* API changes;
+* architecture changes;
+* portability;
+* verification requirements.
+
+---
+
+# 31. Risk
+
+Risk should account for:
+
+* correctness;
+* numerical stability;
+* concurrency;
+* portability;
+* API compatibility;
+* security;
+* maintainability.
+
+For numerical software, optimisation risk should explicitly consider numerical equivalence.
+
+---
+
+# 32. Generality
+
+Generality measures how broadly the optimisation applies.
+
+Example:
+
+```text
+A single specialised function:
+    Generality = 2
+
+A shared crate used by 20 repositories:
+    Generality = 10
+```
+
+This is particularly important for the TPT ecosystem.
+
+An optimisation to a shared primitive may be worth more than an optimisation to one application.
+
+---
+
+# 33. TPT Ecosystem Mode
+
+`tpt-profiler` SHOULD support scanning multiple repositories.
+
+Example:
+
+```bash
+tpt-profiler ecosystem ~/tpt-solutions
+```
+
+Output:
+
+```text
+TPT ECOSYSTEM OPTIMISATION REPORT
+
+Repositories analysed: 87
+
+Opportunities: 327
+
+HIGH PRIORITY
+
+1. tpt-kinetix
+   SIMD
+   Priority: 96
+
+2. tpt-cadence
+   Vectorisation
+   Priority: 93
+
+3. tpt-mathr
+   Allocation
+   Priority: 91
+
+4. tpt-cv
+   Parallelism
+   Priority: 87
+```
+
+---
+
+# 34. Shared Opportunity Detection
+
+The ecosystem analyser should identify repeated patterns.
+
+For example:
+
+```text
+tpt-cadence
+tpt-kinetix
+tpt-audio
+tpt-visual
+```
+
+may all contain similar SIMD opportunities.
+
+Rather than creating four independent recommendations, the system could report:
+
+```text
+ECOSYSTEM OPPORTUNITY
+
+Category:
+SIMD
+
+Affected repositories:
+4
+
+Potential shared primitive:
+tpt-simd
+
+Estimated ecosystem impact:
+VERY HIGH
+```
+
+This is a major reason for keeping the profiler ecosystem-aware.
+
+---
+
+# 35. Recommendation Relationships
+
+Opportunities may depend on other opportunities.
+
+Example:
+
+```text
+SIMD optimisation
+       │
+       └── requires data-layout optimisation
+                         │
+                         └── requires API change
+```
+
+The profiler should represent dependencies between opportunities.
+
+---
+
+# 36. Baseline System
+
+Every project should be able to establish a baseline.
+
+Example:
+
+```bash
+tpt-profiler baseline
+```
+
+Store:
+
+```text
+runtime
+CPU
+memory
+allocations
+binary size
+compile time
+benchmark results
+```
+
+Later:
+
+```bash
+tpt-profiler compare
+```
+
+should report:
+
+```text
+Performance Change
+
+Runtime:
+  -18.4%
+
+Peak memory:
+  -11.2%
+
+Allocations:
+  -43.7%
+
+Binary:
+  +2.1%
+```
+
+---
+
+# 37. Regression Detection
+
+`tpt-profiler` SHOULD detect regressions.
+
+Example:
+
+```text
+REGRESSION
+
+Function:
+decode_frame
+
+Previous:
+12.4 ms
+
+Current:
+15.8 ms
+
+Change:
++27.4%
+
+Confidence:
+Very High
+
+Severity:
+High
+```
+
+---
+
+# 38. Optimisation Validation
+
+The profiler should not stop after making a recommendation.
+
+It should allow the resulting change to be measured.
+
+Conceptually:
+
+```text
+Detect
+  ↓
+Recommend
+  ↓
+Optimise
+  ↓
+Profile
+  ↓
+Compare
+  ↓
+Validate
+```
+
+The system should record whether an opportunity was:
+
+```text
+Open
+Accepted
+Rejected
+In Progress
+Optimised
+Validated
+Regressed
+Superseded
+```
+
+---
+
+# 39. CI Integration
+
+`tpt-profiler` SHOULD support CI.
+
+Example:
+
+```bash
+tpt-profiler ci
+```
+
+Possible policies:
+
+```text
+Fail if:
+    runtime regression > 10%
+
+Warn if:
+    binary size > 5%
+
+Warn if:
+    new HIGH priority opportunity appears
+
+Fail if:
+    critical benchmark regresses
+```
+
+Configuration:
+
+```toml
+[ci]
+fail_on_regression = true
+runtime_threshold = 0.10
+binary_threshold = 0.05
+```
+
+---
+
+# 40. Configuration
+
+Configuration should use:
+
+```text
+tpt-profiler.toml
+```
+
+Example:
+
+```toml
+[project]
+name = "tpt-cadence"
+
+[profiling]
+runtime = true
+memory = true
+cpu = true
+simd = true
+
+[benchmarks]
+enabled = true
+
+[ci]
+enabled = true
+fail_on_regression = true
+```
+
+---
+
+# 41. CLI
+
+Initial CLI:
+
+```text
+tpt-profiler scan
+tpt-profiler static
+tpt-profiler runtime
+tpt-profiler bench
+tpt-profiler cpu
+tpt-profiler memory
+tpt-profiler build
+tpt-profiler full
+
+tpt-profiler baseline
+tpt-profiler compare
+tpt-profiler report
+
+tpt-profiler ecosystem
+tpt-profiler opportunities
+tpt-profiler explain <id>
+```
+
+---
+
+# 42. Output Formats
+
+The profiler SHOULD support:
+
+```text
+Terminal
+JSON
+JSONL
+Markdown
+HTML
+```
+
+Machine-readable output is critical.
+
+Example:
+
+```bash
+tpt-profiler full --format json
+```
+
+This allows other TPT tools to consume profiler results.
+
+---
+
+# 43. Integration with tpt-weave
+
+`tpt-weave` should be able to consume profiler output.
+
+Potential workflow:
+
+```text
+tpt-profiler
+      │
+      ▼
+optimisation opportunities
+      │
+      ▼
+tpt-weave
+      │
+      ▼
+engineering plan
+      │
+      ▼
+LLM/developer
+      │
+      ▼
+code changes
+      │
+      ▼
+tpt-profiler
+      │
+      ▼
+validation
+```
+
+`tpt-profiler` should not depend on `tpt-weave`.
+
+The dependency should be optional and directional.
+
+---
+
+# 44. Integration with tpt-simd
+
+`tpt-profiler` should understand SIMD as an optimisation category.
+
+Where `tpt-simd` exists, recommendations may include:
+
+```text
+Suggested implementation source:
+tpt-simd
+```
+
+However, `tpt-profiler` MUST remain usable without `tpt-simd`.
+
+---
+
+# 45. Integration with tpt-readme
+
+`tpt-readme` may consume profiler results to generate repository information such as:
+
+```text
+Performance Status
+Optimisation Opportunities
+Latest Benchmark
+Regression Status
+```
+
+But `tpt-readme` should not own profiling logic.
+
+---
+
+# 46. Integration with tpt-cargo-vitals
+
+`tpt-cargo-vitals` and `tpt-profiler` should remain separate.
+
+`cargo-vitals` answers:
+
+> "Is this Cargo project healthy?"
+
+`profiler` answers:
+
+> "Where can this project be made better?"
+
+They may exchange machine-readable information.
+
+---
+
+# 47. Integration with tpt-telos
+
+Formal verification may be useful when optimising:
+
+* numerical algorithms;
+* unsafe code;
+* SIMD implementations;
+* concurrency;
+* cryptographic code;
+* safety-critical systems.
+
+A future workflow could be:
+
+```text
+tpt-profiler
+    ↓
+optimisation opportunity
+    ↓
+implementation
+    ↓
+tpt-telos
+    ↓
+prove equivalence/correctness
+    ↓
+tpt-profiler
+    ↓
+measure improvement
+```
+
+---
+
+# 48. Hardware Abstraction
+
+The profiler should capture environment information.
+
+At minimum:
+
+```text
+OS
+Architecture
+CPU
+CPU cores
+Memory
+Rust version
+Cargo version
+Compiler version
+Target
+Optimisation flags
+```
+
+This is essential because profiling results are environment-dependent.
+
+---
+
+# 49. Reproducibility
+
+Profile results SHOULD record enough information to reproduce the run.
+
+A result should include:
+
+```text
+Git commit
+Dirty working tree status
+Rust version
+Cargo version
+Target triple
+CPU
+OS
+Compiler flags
+Profile configuration
+Workload
+Input
+Timestamp
+```
+
+---
+
+# 50. Statistical Analysis
+
+Benchmark measurements must account for noise.
+
+The profiler should support:
+
+* repeated runs;
+* mean;
+* median;
+* standard deviation;
+* confidence intervals where appropriate;
+* outlier detection;
+* warm-up;
+* cold-start measurement.
+
+A single benchmark execution should not normally be treated as definitive evidence.
+
+---
+
+# 51. Measurement vs Recommendation
+
+The architecture MUST separate:
+
+```text
+Measurement
+```
+
+from:
+
+```text
+Interpretation
+```
+
+For example:
+
+```text
+Measurement:
+Function X consumes 41% CPU.
+
+Interpretation:
+Potential hotspot.
+
+Recommendation:
+Investigate algorithmic optimisation.
+
+Confidence:
+High.
+```
+
+This prevents heuristic assumptions from being confused with observed facts.
+
+---
+
+# 52. False Positive Management
+
+Optimisation recommendations will sometimes be wrong.
+
+Therefore opportunities should support:
+
+```text
+dismiss
+snooze
+ignore
+mark-not-applicable
+mark-accepted
+```
+
+Users should be able to provide a reason:
+
+```text
+Rejected:
+Already optimised.
+```
+
+or:
+
+```text
+Rejected:
+Performance is irrelevant for this workload.
+```
+
+The profiler can later use this information to improve heuristics.
+
+---
+
+# 53. Safety
+
+`tpt-profiler` MUST NOT automatically modify source code in the initial versions.
+
+The profiler should:
+
+```text
+observe
+measure
+analyse
+recommend
+validate
+```
+
+rather than:
+
+```text
+rewrite
+```
+
+Automatic optimisation may become a separate system later.
+
+---
+
+# 54. Unsafe Code
+
+The profiler should identify unsafe regions involved in optimisation opportunities.
+
+Example:
+
+```text
+SIMD optimisation candidate
+
+Requires unsafe:
+YES
+
+Affected region:
+src/transform.rs:142-188
+
+Correctness risk:
+HIGH
+```
+
+This is particularly important for low-level TPT libraries.
+
+---
+
+# 55. Numerical Software
+
+For mathematical, physics, DSP, graphics, and simulation projects, the profiler should recognise:
+
+* floating-point operations;
+* precision changes;
+* vectorisation;
+* fused operations;
+* approximate algorithms;
+* transcendental functions;
+* numerical stability.
+
+It should never assume:
+
+```text
+faster == equivalent
+```
+
+---
+
+# 56. Energy Analysis
+
+Energy profiling should be a future capability.
+
+Potential metrics:
+
+* CPU energy;
+* GPU energy;
+* performance per watt;
+* energy per operation.
+
+This is particularly relevant for:
+
+* embedded systems;
+* robotics;
+* mobile;
+* edge AI;
+* long-running services.
+
+---
+
+# 57. Architecture Opportunities
+
+The profiler may eventually detect higher-level issues such as:
+
+```text
+Repeated work across modules
+Unnecessary conversion layers
+Duplicate implementations
+Excessive synchronisation
+Poor pipeline structure
+Repeated serialisation
+Cross-crate inefficiency
+```
+
+These findings require lower confidence than direct runtime measurements.
+
+---
+
+# 58. Opportunity Aggregation
+
+Multiple low-level findings may be grouped into a larger recommendation.
+
+Example:
+
+```text
+47 individual allocation findings
+        ↓
+Grouped opportunity
+        ↓
+"Introduce reusable decode buffer"
+```
+
+This prevents the output from becoming an overwhelming list of hundreds of minor findings.
+
+---
+
+# 59. Prioritisation for a Solo Developer
+
+The profiler SHOULD support a practical mode optimised for limited engineering resources.
+
+Example:
+
+```bash
+tpt-profiler opportunities --strategy=highest-value
+```
+
+Output:
+
+```text
+TOP 10 OPTIMISATIONS
+
+1. tpt-kinetix
+   SIMD
+   Impact: Very High
+   Effort: Medium
+   Priority: 96
+
+2. tpt-mathr
+   Allocation
+   Impact: High
+   Effort: Low
+   Priority: 94
+
+3. tpt-cadence
+   Parallel decode
+   Impact: High
+   Effort: Medium
+   Priority: 91
+```
+
+This is more useful than simply producing a technical profile.
+
+---
+
+# 60. Ecosystem Value
+
+The system should account for shared infrastructure.
+
+For example:
+
+```text
+Optimising tpt-simd:
+    benefits 12 repositories
+
+Optimising one application:
+    benefits 1 repository
+```
+
+Therefore the shared primitive may receive a higher ecosystem priority.
+
+This should be configurable.
+
+---
+
+# 61. Suggested Crate Structure
+
+The repository SHOULD initially use a workspace.
+
+```text
+tpt-profiler/
+│
+├── Cargo.toml
+├── LICENSE
+├── LICENSE-MIT
+├── README.md
+├── DESIGN.md
+├── CHANGELOG.md
+│
+├── crates/
+│   │
+│   ├── tpt-profiler/
+│   │   └── Core library
+│   │
+│   ├── tpt-profiler-cli/
+│   │   └── CLI
+│   │
+│   ├── tpt-profiler-model/
+│   │   └── Shared data model
+│   │
+│   ├── tpt-profiler-static/
+│   │   └── Static analysis
+│   │
+│   ├── tpt-profiler-runtime/
+│   │   └── Runtime profiling
+│   │
+│   ├── tpt-profiler-bench/
+│   │   └── Benchmark analysis
+│   │
+│   ├── tpt-profiler-memory/
+│   │   └── Memory analysis
+│   │
+│   ├── tpt-profiler-build/
+│   │   └── Build analysis
+│   │
+│   ├── tpt-profiler-opportunity/
+│   │   └── Opportunity engine
+│   │
+│   └── tpt-profiler-report/
+│       └── Output/report generation
+│
+└── tests/
+```
+
+The project should avoid creating all crates immediately if they aren't needed.
+
+Start with the smallest useful architecture.
+
+---
+
+# 62. Initial MVP
+
+The MVP should NOT attempt to implement every profiling technique.
+
+Version 0.1 should provide:
+
+### Discovery
+
+* Cargo workspace discovery;
+* crate discovery;
+* benchmark discovery.
+
+### Static analysis
+
+* clone detection;
+* allocation patterns;
+* obvious loop opportunities;
+* SIMD candidates;
+* parallelism candidates;
+* dependency analysis.
+
+### Runtime
+
+* benchmark execution;
+* runtime measurement;
+* Criterion integration where available.
+
+### Opportunity engine
+
+* impact;
+* confidence;
+* effort;
+* risk;
+* priority.
+
+### Output
+
+* terminal;
+* JSON;
+* Markdown.
+
+### Baseline
+
+* save profile;
+* compare profile.
+
+This alone would already be useful.
+
+---
+
+# 63. Phase 2
+
+Add:
+
+* OS profiler integrations;
+* `perf`;
+* allocation profiling;
+* cache analysis;
+* binary analysis;
+* compile-time analysis;
+* richer SIMD detection;
+* ecosystem scanning.
+
+---
+
+# 64. Phase 3
+
+Add:
+
+* CI integration;
+* regression detection;
+* HTML reports;
+* persistent opportunity tracking;
+* cross-repository opportunity aggregation;
+* `tpt-weave` integration;
+* `tpt-readme` integration.
+
+---
+
+# 65. Phase 4
+
+Add:
+
+* WASM analysis;
+* GPU analysis;
+* energy analysis;
+* advanced architecture analysis;
+* learned heuristics;
+* historical optimisation effectiveness.
+
+---
+
+# 66. Phase 5
+
+Potentially add:
+
+* automatic experiment generation;
+* candidate optimisation generation;
+* automated benchmark comparison;
+* integration with AI coding systems;
+* verified optimisation workflows.
+
+Automatic code modification should remain outside the core profiler unless there is a compelling reason to include it.
+
+---
+
+# 67. Plugin Architecture
+
+Profiling capabilities should eventually be modular.
+
+Conceptually:
+
+```text
+Profiler
+   │
+   ├── Rust Analyzer
+   ├── CPU Analyzer
+   ├── Memory Analyzer
+   ├── SIMD Analyzer
+   ├── GPU Analyzer
+   ├── WASM Analyzer
+   └── Dependency Analyzer
+```
+
+Each analyser produces standardised evidence.
+
+This prevents the core from becoming tightly coupled to one profiling technology.
+
+---
+
+# 68. External Tool Integration
+
+Where practical, integrate with established tools instead of reproducing them.
+
+Potential integrations include:
+
+```text
+Cargo
+Criterion
+rustc
+cargo build
+perf
+LLVM tooling
+platform profilers
+DWARF/debug information
+WASM tooling
+```
+
+External tools should be treated as evidence providers.
+
+---
+
+# 69. Machine-Readable Schema
+
+The output format should be stable enough for other TPT projects to consume.
+
+Example conceptual JSON:
+
+```json
+{
+  "repository": "tpt-cadence",
+  "commit": "abc123",
+  "opportunities": [
+    {
+      "id": "SIMD-00042",
+      "category": "simd",
+      "component": "mdct::transform",
+      "impact": 9,
+      "confidence": 9,
+      "effort": 5,
+      "risk": 3,
+      "generality": 8,
+      "priority": 86
+    }
+  ]
+}
+```
+
+The exact schema should be versioned.
+
+---
+
+# 70. Privacy
+
+`tpt-profiler` should operate locally by default.
+
+No source code should be uploaded anywhere.
+
+No telemetry should be required.
+
+If future cloud or AI analysis is added, it MUST be explicit and opt-in.
+
+---
+
+# 71. Licensing
+
+All original TPT code should be:
+
+```text
+MIT
+```
+
+Dependencies must be reviewed for:
+
+* licence compatibility;
+* patent concerns;
+* redistribution requirements.
+
+The project should favour dependencies compatible with the broader TPT licensing philosophy.
+
+---
+
+# 72. Performance Requirements
+
+Ironically, the profiler itself must be efficient.
+
+The profiler should avoid:
+
+* excessive allocations;
+* unnecessarily expensive analysis;
+* huge persistent databases;
+* unnecessary network access.
+
+Static analysis should support incremental operation where practical.
+
+---
+
+# 73. `no_std`
+
+The core data model and low-level components SHOULD be designed so that `no_std` compatibility is possible where practical.
+
+The CLI and operating-system integrations will naturally require `std`.
+
+Potential architecture:
+
+```text
+tpt-profiler-model
+        ↓
+    no_std-capable
+
+tpt-profiler
+        ↓
+     std optional
+
+tpt-profiler-cli
+        ↓
+       std
+```
+
+---
+
+# 74. Error Handling
+
+Errors should be explicit and structured.
+
+Potential categories:
+
+```text
+DiscoveryError
+ConfigurationError
+ProfilingError
+BenchmarkError
+AnalysisError
+ToolUnavailable
+ParseError
+SerializationError
+EnvironmentError
+```
+
+The profiler should distinguish:
+
+```text
+"no opportunity detected"
+```
+
+from:
+
+```text
+"profiling failed"
+```
+
+---
+
+# 75. Determinism
+
+Static analysis should be deterministic.
+
+Runtime measurements will naturally vary.
+
+Reports should therefore distinguish:
+
+```text
+Deterministic finding
+```
+
+from:
+
+```text
+Statistical finding
+```
+
+---
+
+# 76. Testing Strategy
+
+Testing should include:
+
+### Unit tests
+
+* parsers;
+* scoring;
+* models;
+* detectors.
+
+### Integration tests
+
+* Cargo workspace discovery;
+* benchmark execution;
+* profiler integrations.
+
+### Golden tests
+
+For:
+
+* reports;
+* JSON;
+* Markdown.
+
+### Performance tests
+
+The profiler itself should be benchmarked.
+
+### Regression tests
+
+Known optimisation opportunities should remain detectable.
+
+---
+
+# 77. Example User Workflow
+
+A developer starts work on a repository.
+
+```bash
+cd tpt-kinetix
+
+tpt-profiler full
+```
+
+The profiler reports:
+
+```text
+TPT PROFILER
+============
+
+Repository: tpt-kinetix
+
+Overall optimisation potential: HIGH
+
+HIGH PRIORITY
+
+#1 SIMD
+    Function: process_block
+    Impact: 9/10
+    Confidence: 9/10
+    Effort: 4/10
+    Priority: 94
+
+#2 Parallelism
+    Function: decode_frames
+    Impact: 8/10
+    Confidence: 8/10
+    Effort: 5/10
+    Priority: 82
+
+#3 Allocation
+    Function: parse_frame
+    Impact: 6/10
+    Confidence: 8/10
+    Effort: 2/10
+    Priority: 80
+```
+
+The developer works on #1.
+
+Then:
+
+```bash
+tpt-profiler baseline
+```
+
+After the optimisation:
+
+```bash
+tpt-profiler compare
+```
+
+Result:
+
+```text
+VALIDATED
+
+process_block:
+    Before: 4.82 ms
+    After:  1.71 ms
+
+Improvement:
+    64.5%
+
+Memory:
+    unchanged
+
+Correctness:
+    benchmarks passed
+```
+
+The opportunity becomes:
+
+```text
+VALIDATED
+```
+
+---
+
+# 78. Long-Term Vision
+
+The ultimate goal is to make `tpt-profiler` the **performance intelligence layer of the TPT ecosystem**.
+
+The system should eventually understand:
+
+```text
+What exists?
+        ↓
+What does it do?
+        ↓
+What workloads matter?
+        ↓
+Where is it spending resources?
+        ↓
+What could be improved?
+        ↓
+Which improvement has the highest value?
+        ↓
+How difficult is it?
+        ↓
+Did the optimisation work?
+        ↓
+Did it introduce regressions?
+```
+
+This creates a continuous engineering feedback loop.
+
+---
+
+# 79. Relationship to the TPT Ecosystem
+
+The intended relationship is:
+
+```text
+                 ┌─────────────────┐
+                 │   TPT Repos     │
+                 └────────┬────────┘
+                          │
+                          ▼
+                  ┌───────────────┐
+                  │ tpt-profiler  │
+                  └───────┬───────┘
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+          tpt-simd     tpt-math    tpt-weave
+              │           │           │
+              └───────────┼───────────┘
+                          ▼
+                   Improved Code
+                          │
+                          ▼
+                  tpt-profiler
+                          │
+                          ▼
+                    Measurement
+```
+
+`tpt-profiler` is therefore not an optimisation implementation itself.
+
+It is the **system that tells the ecosystem where optimisation effort is most valuable**.
+
+---
+
+# 80. Success Criteria
+
+`tpt-profiler` will be considered successful when it can take an unfamiliar Rust repository and produce a useful ranked list such as:
+
+```text
+TOP OPTIMISATION OPPORTUNITIES
+
+1. SIMD optimisation
+   Expected benefit: HIGH
+   Confidence: HIGH
+   Effort: MEDIUM
+
+2. Allocation reduction
+   Expected benefit: HIGH
+   Confidence: HIGH
+   Effort: LOW
+
+3. Parallel processing
+   Expected benefit: MEDIUM
+   Confidence: MEDIUM
+   Effort: MEDIUM
+
+4. Dependency reduction
+   Expected benefit: MEDIUM
+   Confidence: HIGH
+   Effort: LOW
+```
+
+and, importantly, those recommendations should be **actionable rather than merely interesting**.
+
+The most important metric is therefore not:
+
+> "How many things can `tpt-profiler` detect?"
+
+It is:
+
+> **"How often does its top recommendation result in a worthwhile improvement?"**
+
+---
+
+# 81. Guiding Principle
+
+> **Measure first. Recommend second. Optimise third. Measure again.**
+
+`tpt-profiler` exists to make that loop systematic across the entire TPT Solutions ecosystem.
