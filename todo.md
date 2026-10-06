@@ -78,24 +78,24 @@
 ## Phase 1 — MVP (v0.1.0, spec §62)
 
 ### 1.1 Data model (`tpt-profiler-model`, §6, §24, §25)
-- [ ] Hierarchy types: Repository, Project, Crate, Module, Function, Dependency, Workload
-- [ ] ProfileRun type
-- [ ] Measurement type: metric, value, unit, source, timestamp, environment, workload, confidence (§24)
-- [ ] Opportunity type: ID, repository, component, category, description, evidence, impact, confidence, effort, risk, generality, priority, suggested action (§25)
-- [ ] Category enum (§26): CPU, SIMD, Parallelism, Memory, Allocation, Cache, Algorithm, Data Structure, I/O, Serialisation, Dependency, Binary Size, Compile Time, WASM, GPU, Architecture, Concurrency
-- [ ] Impact scale 1–10 (§28)
-- [ ] Confidence levels Very Low…Very High (§29)
-- [ ] Effort levels Trivial…Very High (§30)
-- [ ] Risk, including correctness/numerical/concurrency/unsafe dimensions (§31)
-- [ ] Generality scale (§32)
-- [ ] Evidence type with hierarchy: benchmark regression > runtime profile > hardware counter > static+pattern > heuristic (§29)
-- [ ] Separate Measurement / Interpretation / Recommendation types (§51)
-- [ ] Deterministic vs Statistical finding flag (§75)
-- [ ] Opportunity relationships/dependencies graph (§35)
-- [ ] Opportunity lifecycle states: Open, Accepted, Rejected, In Progress, Optimised, Validated, Regressed, Superseded (§38)
-- [ ] Source location type (file, line range, unsafe-region flag, §54)
-- [ ] `no_std` + `alloc` compatibility, serde optional feature
-- [ ] Serde round-trip tests; versioned schema constant
+- [x] Hierarchy types: Repository, Project, Crate, Module, Function, Dependency, Workload
+- [x] ProfileRun type
+- [x] Measurement type: metric, value, unit, source, timestamp, environment, workload, confidence (§24)
+- [x] Opportunity type: ID, repository, component, category, description, evidence, impact, confidence, effort, risk, generality, priority, suggested action (§25)
+- [x] Category enum (§26): CPU, SIMD, Parallelism, Memory, Allocation, Cache, Algorithm, Data Structure, I/O, Serialisation, Dependency, Binary Size, Compile Time, WASM, GPU, Architecture, Concurrency
+- [x] Impact scale 1–10 (§28)
+- [x] Confidence levels Very Low…Very High (§29)
+- [x] Effort levels Trivial…Very High (§30)
+- [x] Risk, including correctness/numerical/concurrency/unsafe dimensions (§31)
+- [x] Generality scale (§32)
+- [x] Evidence type with hierarchy: benchmark regression > runtime profile > hardware counter > static+pattern > heuristic (§29)
+- [x] Separate Measurement / Interpretation / Recommendation types (§51)
+- [x] Deterministic vs Statistical finding flag (§75)
+- [x] Opportunity relationships/dependencies graph (§35)
+- [x] Opportunity lifecycle states: Open, Accepted, Rejected, In Progress, Optimised, Validated, Regressed, Superseded (§38)
+- [x] Source location type (file, line range, unsafe-region flag, §54)
+- [x] `no_std` + `alloc` compatibility, serde optional feature
+- [x] Serde round-trip tests; versioned schema constant
 
 ### 1.2 Configuration (§40)
 - [ ] `tpt-profiler.toml` schema: `[project]`, `[profiling]`, `[benchmarks]`, `[ci]`, `[scoring]`

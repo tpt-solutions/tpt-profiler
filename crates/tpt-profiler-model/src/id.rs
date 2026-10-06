@@ -24,6 +24,7 @@ const NUMBER_MASK: u32 = 0xFFFF;
 
 /// A stable opportunity identifier such as `SIMD-04217`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OpportunityId(String);
 
 impl OpportunityId {
@@ -144,6 +145,6 @@ mod tests {
     #[test]
     fn display_matches_inner_string() {
         let id = OpportunityId::generate("CPU", "x", "y");
-        assert_eq!(alloc::format!("{id}"), id.as_str());
+        assert_eq!(format!("{id}"), id.as_str());
     }
 }
