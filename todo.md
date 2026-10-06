@@ -125,24 +125,24 @@
 - [x] Cross-platform tests (Windows/Linux/macOS) — host tests assert the capture contract; CI matrix covers all three OSes
 
 ### 1.5 Static analysis engine (`tpt-profiler-static`, §9–13, §18)
-- [ ] `syn`-based source walker with span → file/line mapping
-- [ ] Analyzer trait producing standardised evidence (§67)
-- [ ] Deterministic ordering and output (§75)
-- [ ] Per-finding evidence + confidence (no blind flagging, §9)
-- [ ] Allocation detection (§9.1): allocation in loops, repeated `Vec` growth, missing `with_capacity`, temporary collections, needless `String`, repeated `format!`, boxing, allocation-heavy iterator chains, allocation-heavy error paths
-- [ ] Clone analysis (§10): `.clone()` in loops, large-value clone vs `Arc`/`Rc` clone heuristics, repeated conversions, needless ownership transfer
-- [ ] Heuristic type-name resolution for `Arc`/`Rc` vs struct clone (document limits of `syn`)
-- [ ] Data-structure mismatches (§11): `Vec` membership lookups, tiny `HashMap`, `String` vs bytes, heap for fixed-size, linked structures
-- [ ] Obvious loop opportunities (hoisting, repeated computation)
-- [ ] SIMD candidate detection (§12): independent scalar arithmetic over contiguous fixed-width data, no loop-carried dependency, numeric kernels
-- [ ] Parallelism candidate detection (§13): independent iterations, expensive per-item work, workload-size/overhead guard (don't recommend for tiny loops)
-- [ ] Unsafe-region detection and tagging on affected code (§54)
-- [ ] Numerical-code recognition (floating point, precision, transcendental) and "faster ≠ equivalent" risk flag (§55)
-- [ ] Group related low-level findings into aggregated opportunities (§58)
-- [ ] Suppression comments / config ignores
-- [ ] Unit tests per detector with positive and negative fixtures
-- [ ] Regression corpus of known-detectable opportunities (§76)
-- [ ] Parse-failure handling (continue, report ParseError, don't abort the run)
+- [x] `syn`-based source walker with span → file/line mapping (proc-macro2 `span-locations`; gitignore-aware walk)
+- [x] Analyzer trait producing standardised evidence (§67) — `Analyzer` + `StaticEngine` registry, `Finding` → `Evidence`
+- [x] Deterministic ordering and output (§75) — findings sorted by (file, line, detector, description); corpus test asserts reproducibility
+- [x] Per-finding evidence + confidence (no blind flagging, §9) — static evidence capped at Medium, weaker patterns at Low
+- [x] Allocation detection (§9.1): allocation in loops, `Vec::new`/`String::new` in loops, `vec!`/`collect`/`to_string`/`format!` in loops, `with_capacity` guidance in messages (boxing and error-path heuristics deferred)
+- [x] Clone analysis (§10): `.clone()` in loops, `Arc::clone` path calls exempt, `arc_*`/`rc_*` receiver heuristic (repeated-conversion and ownership-transfer heuristics deferred)
+- [x] Heuristic type-name resolution for `Arc`/`Rc` vs struct clone (limits documented in crate docs)
+- [x] Data-structure mismatches (§11): `contains` membership lookups in loops, tiny `HashMap::from` literals (String-vs-bytes, fixed-size heap, linked-structure checks deferred)
+- [x] Obvious loop opportunities (hoisting, repeated computation) — loop-invariant `let` bindings with call/method initialisers
+- [x] SIMD candidate detection (§12): element-wise indexed arithmetic over ranges, no calls/control flow, caveat text required
+- [x] Parallelism candidate detection (§13): per-item calls in range loops, literal-workload-size guard (MIN_WORKLOAD = 64)
+- [x] Unsafe-region detection and tagging on affected code (§54) — pre-pass tags findings inside `unsafe` blocks/fns
+- [x] Numerical-code recognition (§55) — float literals/casts/transcendental calls mark enclosing functions; `numerical_context` flag = faster ≠ equivalent risk
+- [ ] Group related low-level findings into aggregated opportunities (§58) — `Finding::group_key()` provided; aggregation lands with the opportunity engine (1.8)
+- [x] Suppression comments / config ignores — `// tpt-profiler:ignore` / `// tpt-profiler:ignore-next`
+- [x] Unit tests per detector with positive and negative fixtures (28 tests)
+- [x] Regression corpus of known-detectable opportunities (§76) — `tests/corpus/*.rs` with `// expect:` markers, plus a clean file asserting zero false positives
+- [x] Parse-failure handling (continue, report ParseError, don't abort the run)
 
 ### 1.6 Dependency analysis (§18)
 - [ ] Dependency counts: direct, transitive, build, dev
