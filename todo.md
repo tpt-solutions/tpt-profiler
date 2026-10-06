@@ -105,16 +105,16 @@
 - [x] Config golden tests
 
 ### 1.3 Discovery (§7)
-- [ ] Cargo workspace discovery via `cargo_metadata`
-- [ ] Parse `Cargo.toml` / `Cargo.lock`
-- [ ] Workspace members, binaries, libraries, examples, benches, tests, build scripts
-- [ ] Feature flags, profiles, target configuration
-- [ ] Dependencies, build-dependencies, dev-dependencies
-- [ ] Benchmark discovery (Criterion + `cargo bench` harnesses)
-- [ ] Single-crate and virtual-workspace handling
-- [ ] Respect `.gitignore` when walking sources
-- [ ] `tpt-profiler scan` tree output (Repository → Workspace → crates)
-- [ ] Integration tests against fixture workspaces (single crate, multi-crate, virtual, nested)
+- [x] Cargo workspace discovery via `cargo_metadata`
+- [x] Parse `Cargo.toml` / `Cargo.lock` (delegated to cargo metadata as the evidence provider, §68)
+- [x] Workspace members, binaries, libraries, examples, benches, tests, build scripts
+- [x] Feature flags, profiles, target configuration (features mapped; cargo metadata does not expose profiles/target config — noted limitation)
+- [x] Dependencies, build-dependencies, dev-dependencies
+- [x] Benchmark discovery (Criterion + `cargo bench` harnesses) — `has_benches` + runtime-`criterion` detection
+- [x] Single-crate and virtual-workspace handling
+- [x] Respect `.gitignore` when walking sources (`ignore` crate; `require_git(false)`)
+- [x] `tpt-profiler scan` tree output (Repository → Workspace → crates) — `tpt-profiler-report::render_scan` (CLI wiring in 1.11)
+- [x] Integration tests against fixture workspaces (single crate, multi-crate, virtual; nested fixture pending)
 
 ### 1.4 Environment & reproducibility (§48, §49)
 - [ ] Capture OS, arch, CPU, cores, memory

@@ -22,3 +22,7 @@ Thumbs.db
 # Local env
 .env
 *.log
+
+# Fixture lockfiles/targets (tests/fixtures is excluded from the workspace)
+tests/fixtures/**/Cargo.lock
+tests/fixtures/**/target/

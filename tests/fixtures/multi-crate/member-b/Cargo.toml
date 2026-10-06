@@ -1,0 +1,8 @@
+[package]
+name = "tpt-fixture-member-b"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tpt-fixture-member-a = { path = "../member-a" }

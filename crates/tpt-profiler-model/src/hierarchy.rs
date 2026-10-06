@@ -61,6 +61,15 @@ pub struct CrateInfo {
     pub has_examples: bool,
     /// Has a `build.rs` script.
     pub has_build_script: bool,
+    /// Has a library target.
+    pub has_library: bool,
+    /// Binary target names (spec §7).
+    pub binaries: Vec<String>,
+    /// Declared feature names (spec §7).
+    pub features: Vec<String>,
+    /// Whether any dependency is `criterion` (spec §8.3: benchmark
+    /// discovery).
+    pub uses_criterion: bool,
 }
 
 /// A module within a crate (spec §6).
@@ -85,8 +94,9 @@ pub struct FunctionInfo {
     pub location: SourceLocation,
 }
 
-/// Dependency kind (spec §7, §18).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Dependency kind (spec §7, §18). Ordered for deterministic sorting:
+/// Normal < Build < Dev < Target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum DependencyKind {

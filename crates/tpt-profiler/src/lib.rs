@@ -14,6 +14,7 @@
 //! pipeline lands with the MVP (spec §62).
 
 pub mod config;
+pub mod discovery;
 
 pub use config::{
     BenchmarksConfig, CiConfig, Config, Overrides, ProfilingConfig, ProjectConfig, ScoringConfig,

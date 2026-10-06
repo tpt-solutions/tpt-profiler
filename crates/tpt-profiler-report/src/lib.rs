@@ -4,4 +4,9 @@
 //! spec §69), and Markdown outputs that always distinguish measured facts
 //! from predictions (spec §29).
 //!
-//! **Status:** skeleton. Lands with the MVP (spec §62).
+//! **Status:** the `scan` tree renderer is implemented (spec §7); the
+//! remaining formats land with the MVP (spec §62).
+
+pub mod scan;
+
+pub use scan::render_scan;
