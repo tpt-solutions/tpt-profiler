@@ -70,7 +70,8 @@ pub fn measure_workload(
         let _ = attempt;
         let mut command = Command::new(&runnable.program);
         command.args(&runnable.args);
-        crate::process::run(&mut command, runnable.timeout, cancel).map_err(spawn_error)
+        crate::process::run(&mut command, runnable.timeout, cancel)
+            .map_err(|error| spawn_error(&error))
     };
 
     // Cold start: recorded but never averaged in (spec §50).
@@ -125,7 +126,7 @@ pub fn measure_workload(
 #[must_use]
 pub fn to_measurements(
     result: &WorkloadResult,
-    source: MeasurementSource,
+    source: &MeasurementSource,
     now: UnixSeconds,
     environment: Option<&Environment>,
 ) -> Vec<Measurement> {
@@ -161,7 +162,7 @@ pub fn to_measurements(
     measurements
 }
 
-fn spawn_error(error: std::io::Error) -> tpt_profiler_model::error::Error {
+fn spawn_error(error: &std::io::Error) -> tpt_profiler_model::error::Error {
     tpt_profiler_model::error::Error::Profiling(
         tpt_profiler_model::error::ProfilingError::SpawnFailed {
             command: String::from("<workload>"),
@@ -184,7 +185,7 @@ mod tests {
             failed_runs: 0,
         };
         let measurements =
-            to_measurements(&result, MeasurementSource::WallClock, 1_760_000_000, None);
+            to_measurements(&result, &MeasurementSource::WallClock, 1_760_000_000, None);
         assert_eq!(measurements.len(), 2, "mean + cold start");
         assert_eq!(measurements[0].metric, "decode_1080p_wall_time");
         assert_eq!(measurements[0].kind, FindingKind::Statistical);
@@ -205,7 +206,7 @@ mod tests {
         let mut environment = Environment::default();
         environment.cpu_cores = Some(8);
         let measurements =
-            to_measurements(&result, MeasurementSource::WallClock, 0, Some(&environment));
+            to_measurements(&result, &MeasurementSource::WallClock, 0, Some(&environment));
         assert_eq!(
             measurements[0]
                 .environment

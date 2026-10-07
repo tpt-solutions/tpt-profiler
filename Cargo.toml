@@ -72,6 +72,7 @@ walkdir = "2"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4"
 
 # Config
 toml = "0.8"

@@ -64,7 +64,7 @@ pub fn run(
         .stderr(Stdio::piped())
         .spawn()?;
     let started = Instant::now();
-    let mut child = PipedReader::spawn(child)?;
+    let mut child = PipedReader::spawn(child);
 
     let deadline = started + timeout;
     loop {
@@ -120,28 +120,28 @@ struct PipedReader {
 }
 
 impl PipedReader {
-    fn spawn(mut child: Child) -> std::io::Result<Self> {
+    fn spawn(mut child: Child) -> Self {
         let stdout = child.stdout.take().map(drain);
         let stderr = child.stderr.take().map(drain);
-        Ok(Self {
+        Self {
             child,
             stdout,
             stderr,
-        })
+        }
     }
 
     fn try_finish(
         &mut self,
     ) -> std::io::Result<Option<(String, String, std::process::ExitStatus)>> {
         match self.child.try_wait()? {
-            Some(status) => Some(self.collect(status)).transpose(),
+            Some(status) => Ok(Some(self.collect(status))),
             None => Ok(None),
         }
     }
 
     fn finish(&mut self) -> std::io::Result<(String, String, std::process::ExitStatus)> {
         let status = self.child.wait()?;
-        self.collect(status)
+        Ok(self.collect(status))
     }
 
     fn kill(&mut self) -> std::io::Result<()> {
@@ -152,7 +152,7 @@ impl PipedReader {
     fn collect(
         &mut self,
         status: std::process::ExitStatus,
-    ) -> std::io::Result<(String, String, std::process::ExitStatus)> {
+    ) -> (String, String, std::process::ExitStatus) {
         let stdout = self
             .stdout
             .take()
@@ -161,7 +161,7 @@ impl PipedReader {
             .stderr
             .take()
             .map_or_else(String::new, |handle| handle.join().unwrap_or_default());
-        Ok((stdout, stderr, status))
+        (stdout, stderr, status)
     }
 }
 

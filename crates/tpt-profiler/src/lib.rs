@@ -18,6 +18,7 @@ pub mod config;
 pub mod deps;
 pub mod discovery;
 pub mod environment;
+pub mod pipeline;
 
 pub use config::{
     BenchmarksConfig, CiConfig, Config, Overrides, ProfilingConfig, ProjectConfig, ScoringConfig,

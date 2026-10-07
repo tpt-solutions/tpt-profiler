@@ -68,11 +68,17 @@ pub fn estimate_confidence(evidence: &[Evidence]) -> Confidence {
 pub fn estimate_effort(candidate: &Candidate) -> Effort {
     let base = match candidate.category {
         Category::Dependency | Category::BinarySize | Category::CompileTime => Effort::Low,
-        Category::Allocation | Category::DataStructure | Category::Io => Effort::Medium,
-        Category::Simd | Category::Cache | Category::Serialisation => Effort::Medium,
-        Category::Parallelism | Category::Concurrency | Category::Cpu => Effort::Medium,
-        Category::Algorithm | Category::Architecture | Category::Memory => Effort::High,
-        Category::Wasm | Category::Gpu => Effort::High,
+        Category::Allocation
+        | Category::DataStructure
+        | Category::Io
+        | Category::Simd
+        | Category::Cache
+        | Category::Serialisation
+        | Category::Parallelism
+        | Category::Concurrency
+        | Category::Cpu => Effort::Medium,
+        Category::Algorithm | Category::Architecture | Category::Memory | Category::Wasm
+        | Category::Gpu => Effort::High,
     };
     let touches_unsafe = candidate.evidence.iter().any(|evidence| {
         evidence

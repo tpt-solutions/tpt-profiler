@@ -54,6 +54,7 @@ pub mod workload;
 
 pub use category::Category;
 pub use environment::Environment;
+pub use error::{Error, Result};
 pub use evidence::{Evidence, EvidenceKind, confidence_ceiling, strongest_rank};
 pub use hierarchy::{
     CrateInfo, DependencyInfo, DependencyKind, FunctionInfo, ModuleInfo, Project, Repository,

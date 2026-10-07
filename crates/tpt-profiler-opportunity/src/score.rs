@@ -81,7 +81,7 @@ pub fn compute_priority(
     // past 1000 clamp at 100. (The §25 "86" example is illustrative and
     // not derivable from the §27 formula; see the score tests.)
     let normalised = 100.0 * (raw / 1000.0).max(0.0).sqrt();
-    let priority = normalised.round().clamp(0.0, 100.0) as u8;
+    let priority = u8::try_from(normalised.round() as i64).unwrap_or(100);
     let reasoning = format!(
         "impact {}×{}, confidence {}/{}, generality {}, effort {}/{}, risk {}/{}",
         impact.value(),
