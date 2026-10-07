@@ -169,21 +169,21 @@
 - [x] Emit Measurement records with environment — `to_measurements` stamps workload, confidence from sample spread (CV thresholds), and the run environment
 
 ### 1.8 Opportunity engine (`tpt-profiler-opportunity`, §25–35, §51, §58)
-- [ ] Evidence → Opportunity conversion (Measurement ≠ Interpretation ≠ Recommendation)
-- [ ] Impact estimation
-- [ ] Confidence estimation per evidence hierarchy
-- [ ] Effort estimation
-- [ ] Risk estimation (correctness, numerics, concurrency, unsafe, portability, API)
-- [ ] Generality estimation (e.g. dependents in workspace)
-- [ ] Priority calculator, preliminary formula (Impact × Confidence × Generality) / (Effort × Risk), normalised to 0–100 (§27)
-- [ ] Configurable scoring weights via `[scoring]` config
-- [ ] Don't recommend when evidence is insufficient (§3.1.12)
-- [ ] Don't flag already-near-optimal or rarely-executed code where runtime evidence says so (§2)
-- [ ] Opportunity grouping/aggregation (§58)
-- [ ] Opportunity dependency edges (§35)
-- [ ] `explain` data: why detected, evidence, confidence reasoning
-- [ ] Strategy selection: `highest-value` (§59)
-- [ ] Unit tests for scoring edge cases (zero, max, ties) and stable ordering
+- [x] Evidence → Opportunity conversion (Measurement ≠ Interpretation ≠ Recommendation) — `Candidate` → `Opportunity` with separated interpretation/recommendation
+- [x] Impact estimation (§28) — tracks the §29 evidence tier (heuristic 4 … benchmark regression 8)
+- [x] Confidence estimation per evidence hierarchy (§29) — capped at the tier ceiling regardless of evidence volume
+- [x] Effort estimation (§30) — per-category defaults, +2 when evidence sits in `unsafe` regions
+- [x] Risk estimation (correctness, numerics, concurrency, unsafe, portability, API) — §31 dimensions; numerical context (§55) and unsafe regions raise the overall and their dimensions
+- [x] Generality estimation (§32) — hint overrides per-category defaults
+- [x] Priority calculator, preliminary formula (§27) — (I·w × C·w × G·w)/(E·w × R·w), square-root-normalised to 0–100 with pinned edge tests (0, 100, monotonicity)
+- [x] Configurable scoring weights via `[scoring]` config — `ScoringWeights` mirrors `[scoring]`; core maps config → weights
+- [x] Don't recommend when evidence is insufficient (§3.1.12) — empty-evidence candidates yield NoOpportunity, not errors
+- [x] Don't flag rarely-executed code where runtime evidence says so (§2) — coverage/ratio/percent measurement below 1% suppresses the candidate
+- [x] Opportunity grouping/aggregation (§58) — ≥3 same-category findings in one component merge with pooled evidence (`AGGREGATION_THRESHOLD`)
+- [x] Opportunity dependency edges (§35) — SIMD↔data-structure `RelatedTo` edges in the same component; model carries arbitrary `Relationship`s
+- [x] `explain` data — `explain()` renders id/scores/interpretation/recommendation/evidence; `ScoringTrace` records the calculation
+- [x] Strategy selection: `highest-value` (§59) — `top_n(..., Strategy::HighestValue, n)`
+- [x] Unit tests for scoring edge cases (zero, max, ties) and stable ordering — 18 tests incl. aggregation, suppression, tie stability
 
 ### 1.9 Reporting (`tpt-profiler-report`, §42)
 - [ ] Terminal output (ranked list, colour, width-aware, `NO_COLOR`)
