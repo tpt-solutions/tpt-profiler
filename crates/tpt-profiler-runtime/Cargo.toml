@@ -11,6 +11,10 @@ readme = "../../README.md"
 
 [dependencies]
 tpt-profiler-model.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [lints]
 workspace = true

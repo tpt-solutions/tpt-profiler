@@ -352,7 +352,10 @@ dependencies = [
 name = "tpt-profiler-bench"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "tpt-profiler-model",
+ "tpt-profiler-runtime",
 ]
 
 [[package]]
@@ -403,6 +406,8 @@ dependencies = [
 name = "tpt-profiler-runtime"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
  "tpt-profiler-model",
 ]
 

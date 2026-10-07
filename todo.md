@@ -155,18 +155,18 @@
 - [x] Tests on fixture lockfiles (synthetic metadata JSON for parse determinism; real fixtures exercise the live `cargo metadata` path via discovery tests)
 
 ### 1.7 Runtime & benchmark execution (`tpt-profiler-runtime`, `tpt-profiler-bench`, §8.2–8.3, §23, §50)
-- [ ] Workload model: name, input, duration, repetitions (§23)
-- [ ] Workload definitions in config
-- [ ] Run workloads and collect wall/CPU time
-- [ ] Execute `cargo bench` and discover results
-- [ ] Criterion integration: parse `target/criterion` output / JSON
-- [ ] Graceful behaviour when Criterion absent (§74 ToolUnavailable)
-- [ ] Statistical engine (§50): repeated runs, mean, median, stddev, confidence intervals, outlier detection, warm-up, cold-start
-- [ ] Never treat a single execution as definitive; mark low confidence
-- [ ] Mark results as Statistical vs Deterministic (§75)
-- [ ] Timeouts, cancellation, and child-process cleanup
-- [ ] Windows/Linux/macOS process handling tests
-- [ ] Emit Measurement records with environment
+- [x] Workload model: name, input, duration, repetitions (§23) — model `Workload` + runtime `RunnableWorkload` (program, args, warm-up, timeout)
+- [x] Workload definitions in config — `[[workloads]]` section (name/command/args/repetitions/warmup_runs/timeout_ms)
+- [x] Run workloads and collect wall/CPU time (wall time per run; CPU time via external profilers lands in Phase 2)
+- [x] Execute `cargo bench` and discover results (`bench::run_benches`, bench-target discovery via CrateInfo.has_benches)
+- [x] Criterion integration — parses `target/criterion/**/new/estimates.json` (mean with median fallback), ns → s conversion
+- [x] Graceful behaviour when Criterion absent (§74) — absent benches → `no_benchmarks` result, absent criterion dir → empty estimates, missing cargo → `ToolUnavailable`
+- [x] Statistical engine (§50) — repeats, mean/median/stddev/min/max, 95% CI (normal approx, documented), Tukey-hinge 1.5×IQR outlier rejection, warm-up discard, cold-start recorded separately
+- [x] Never treat a single execution as definitive — single sample is always `Low` confidence
+- [x] Mark results as Statistical vs Deterministic (§75) — all runtime/bench measurements are `FindingKind::Statistical`
+- [x] Timeouts, cancellation, and child-process cleanup — poll-and-kill runner with `CancelToken`; output pipes drained on background threads (no pipe deadlock)
+- [x] Windows/Linux/macOS process handling tests — portable echo/false/timeout-sleep tests incl. timeout-kill and cancellation (CI matrix covers all three OSes)
+- [x] Emit Measurement records with environment — `to_measurements` stamps workload, confidence from sample spread (CV thresholds), and the run environment
 
 ### 1.8 Opportunity engine (`tpt-profiler-opportunity`, §25–35, §51, §58)
 - [ ] Evidence → Opportunity conversion (Measurement ≠ Interpretation ≠ Recommendation)

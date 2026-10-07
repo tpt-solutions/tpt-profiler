@@ -29,6 +29,10 @@ pub struct Config {
     /// Scoring weights (spec §27: the formula is configurable and *not*
     /// an API contract).
     pub scoring: ScoringConfig,
+    /// Workload definitions (spec §23): named units of work the runtime
+    /// profiler executes.
+    #[serde(default)]
+    pub workloads: Vec<WorkloadConfig>,
 }
 
 /// `[project]` section.
@@ -81,6 +85,25 @@ pub struct CiConfig {
     pub runtime_threshold: f64,
     /// Binary-size growth threshold as a fraction (0.05 = warn above 5%).
     pub binary_threshold: f64,
+}
+
+/// A `[[workloads]]` entry (spec §23): name, command, repetitions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkloadConfig {
+    /// Stable workload name used in measurements and baselines.
+    pub name: String,
+    /// Executable to run (relative to the workspace root when not absolute).
+    pub command: String,
+    /// Arguments, typically including the input fixture (spec §23).
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Measured repetitions (default 5 when omitted).
+    pub repetitions: Option<u32>,
+    /// Warm-up runs discarded before measuring (default 2).
+    pub warmup_runs: Option<u32>,
+    /// Per-run timeout in milliseconds (default 60_000).
+    pub timeout_ms: Option<u64>,
 }
 
 /// `[scoring]` section: weights for the priority formula (spec §27).
@@ -376,6 +399,25 @@ mod tests {
         assert_eq!(source.as_deref(), Some(config_path.as_path()));
 
         std::fs::remove_dir_all(&temp).expect("cleanup");
+    }
+
+    #[test]
+    fn workloads_parse_from_config() {
+        let text = r#"
+            [[workloads]]
+            name = "decode_1080p"
+            command = "./target/release/decoder"
+            args = ["sample.mp4", "--frames", "300"]
+            repetitions = 10
+            warmup_runs = 1
+            timeout_ms = 5000
+        "#;
+        let config = Config::from_toml(Path::new("c.toml"), text).expect("parse");
+        assert_eq!(config.workloads.len(), 1);
+        let workload = &config.workloads[0];
+        assert_eq!(workload.name, "decode_1080p");
+        assert_eq!(workload.repetitions, Some(10));
+        assert_eq!(workload.args.len(), 3);
     }
 
     #[test]

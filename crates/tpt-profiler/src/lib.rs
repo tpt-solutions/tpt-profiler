@@ -20,6 +20,7 @@ pub mod environment;
 
 pub use config::{
     BenchmarksConfig, CiConfig, Config, Overrides, ProfilingConfig, ProjectConfig, ScoringConfig,
+    WorkloadConfig,
 };
 
 /// Version of the workspace, as reported by the CLI.
