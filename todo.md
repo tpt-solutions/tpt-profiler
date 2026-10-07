@@ -186,23 +186,23 @@
 - [x] Unit tests for scoring edge cases (zero, max, ties) and stable ordering — 18 tests incl. aggregation, suppression, tie stability
 
 ### 1.9 Reporting (`tpt-profiler-report`, §42)
-- [ ] Terminal output (ranked list, colour, width-aware, `NO_COLOR`)
-- [ ] JSON output with versioned schema (§69)
-- [ ] Markdown output
-- [ ] Distinguish measured facts vs predictions in every format (§29)
-- [ ] Output to stdout or `--output` file
-- [ ] Golden tests for terminal/JSON/Markdown (§76)
-- [ ] JSON schema published and validated in tests
+- [x] Terminal output (ranked list, colour, width-aware, `NO_COLOR`) — `render_opportunities` with `TerminalOptions { colour, width }`; NO_COLOR/tty decided by the CLI layer
+- [x] JSON output with versioned schema (§69) — `render_json` under the `SchemaEnvelope`; summary shape matches the §69 example
+- [x] Markdown output — ranked table + per-opportunity sections
+- [x] Distinguish measured facts vs predictions in every format (§29) — `Basis:`/"measured (statistical)" vs "static (deterministic)" in all three formats
+- [x] Output to stdout or `--output` file — renderers return strings; file routing lands with the CLI (1.11)
+- [x] Golden tests for terminal/JSON/Markdown (§76) — exact terminal golden, JSON round-trip through the model, markdown structure
+- [x] JSON schema published and validated in tests — envelope validation (schema_version) tested; round-trip via model types
 
 ### 1.10 Baseline & compare (§36)
-- [ ] `.tpt-profiler/` directory layout and versioning
-- [ ] `baseline` saves runtime, memory (if available), binary size, benchmark results
-- [ ] `compare` reports % change for each metric
-- [ ] Noise-aware comparison using the statistical engine
-- [ ] Handle environment mismatch between baseline and current (warn)
-- [ ] Handle missing/corrupt/old-schema baselines
-- [ ] Named baselines
-- [ ] Tests for compare output (golden)
+- [x] `.tpt-profiler/` directory layout and versioning — `.tpt-profiler/baselines/<name>.json` under `SchemaEnvelope`
+- [x] `baseline` saves runtime measurements (memory/binary/bench as they become available in later phases) — `save_baseline` + `baseline_from_run`
+- [x] `compare` reports % change for each metric — signed fractional change, `change_percent()` rendering
+- [x] Noise-aware comparison using the statistical engine — measurement confidence gates the verdict: Low-confidence pairs are `Noisy`, never regressions; thresholds from `[ci]`
+- [x] Handle environment mismatch between baseline and current (warn) — OS mismatch sets `environment_warning`
+- [x] Handle missing/corrupt/old-schema baselines — missing = `None` (a state), corrupt = `DecodeFailed`, future schema = `SchemaTooNew`, never reinterpreted
+- [x] Named baselines
+- [x] Tests for compare output (golden) — improved/regressed/unchanged/noisy matrix + percent formatting
 
 ### 1.11 CLI (`tpt-profiler-cli`, §41)
 - [ ] Binary name `tpt-profiler`; clap-based command structure

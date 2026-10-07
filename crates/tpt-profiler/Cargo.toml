@@ -12,14 +12,12 @@ keywords = ["profiling", "performance", "optimisation"]
 categories = ["development-tools"]
 
 [dependencies]
-tpt-profiler-model.workspace = true
+tpt-profiler-model = { workspace = true, features = ["serde"] }
 serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 cargo_metadata.workspace = true
 ignore.workspace = true
-
-[dev-dependencies]
-serde_json.workspace = true
 
 [lints]
 workspace = true

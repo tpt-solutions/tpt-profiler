@@ -13,6 +13,7 @@
 //! **Status:** the data model and configuration are in place; the
 //! pipeline lands with the MVP (spec §62).
 
+pub mod baseline;
 pub mod config;
 pub mod deps;
 pub mod discovery;
