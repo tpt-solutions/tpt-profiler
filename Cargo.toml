@@ -66,7 +66,7 @@ quote = "1.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 
 # Discovery
-cargo_metadata = "0.19"
+cargo_metadata = "0.20"
 ignore = "0.4"
 walkdir = "2"
 
