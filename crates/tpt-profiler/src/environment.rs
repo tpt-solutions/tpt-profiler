@@ -110,7 +110,6 @@ fn total_memory_bytes() -> Option<u64> {
         let kilobytes: u64 = info
             .lines()
             .find_map(|line| line.strip_prefix("MemTotal:"))?
-            .trim()
             .split_whitespace()
             .next()?
             .parse()
