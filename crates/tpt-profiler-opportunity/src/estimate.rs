@@ -77,7 +77,10 @@ pub fn estimate_effort(candidate: &Candidate) -> Effort {
         | Category::Parallelism
         | Category::Concurrency
         | Category::Cpu => Effort::Medium,
-        Category::Algorithm | Category::Architecture | Category::Memory | Category::Wasm
+        Category::Algorithm
+        | Category::Architecture
+        | Category::Memory
+        | Category::Wasm
         | Category::Gpu => Effort::High,
     };
     let touches_unsafe = candidate.evidence.iter().any(|evidence| {

@@ -12,7 +12,7 @@
 //!   rarely-executed code), aggregation (§58), relationship edges
 //!   (§35), `top_n` strategies (§59), and `explain` rendering.
 //!
-//! "No opportunity" is a valid [`AnalysisOutcome`], never an error
+//! "No opportunity" is a valid [`tpt_profiler_model::AnalysisOutcome`], never an error
 //! (spec §74).
 
 pub mod candidate;

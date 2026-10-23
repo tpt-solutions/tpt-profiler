@@ -190,7 +190,10 @@ mod tests {
         assert_eq!(measurements[0].metric, "decode_1080p_wall_time");
         assert_eq!(measurements[0].kind, FindingKind::Statistical);
         assert_eq!(measurements[0].workload.as_deref(), Some("decode_1080p"));
-        assert!(measurements[0].confidence != tpt_profiler_model::Confidence::Low);
+        assert_ne!(
+            measurements[0].confidence,
+            tpt_profiler_model::Confidence::Low
+        );
         assert_eq!(measurements[1].metric, "decode_1080p_cold_start");
     }
 
@@ -203,10 +206,16 @@ mod tests {
             samples_seconds: vec![1.0, 1.0],
             failed_runs: 0,
         };
-        let mut environment = Environment::default();
-        environment.cpu_cores = Some(8);
-        let measurements =
-            to_measurements(&result, &MeasurementSource::WallClock, 0, Some(&environment));
+        let environment = Environment {
+            cpu_cores: Some(8),
+            ..Environment::default()
+        };
+        let measurements = to_measurements(
+            &result,
+            &MeasurementSource::WallClock,
+            0,
+            Some(&environment),
+        );
         assert_eq!(
             measurements[0]
                 .environment

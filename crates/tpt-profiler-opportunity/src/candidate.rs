@@ -3,7 +3,7 @@
 //! A [`Candidate`] is one detected pattern with its evidence, produced by
 //! mapping analyzer output (static findings, dependency findings) onto
 //! model types. The engine turns candidates into scored
-//! [`Opportunity`]s — or rejects them when evidence is insufficient
+//! [`tpt_profiler_model::Opportunity`]s — or rejects them when evidence is insufficient
 //! (spec §3.1.12).
 
 use std::string::String;

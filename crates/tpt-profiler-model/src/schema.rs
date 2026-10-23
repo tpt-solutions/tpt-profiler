@@ -113,8 +113,7 @@ mod tests {
         let envelope = SchemaEnvelope::new("tpt-profiler 0.1.0", alloc::vec![String::from("a")]);
         let json = serde_json::to_string(&envelope).expect("encode");
         assert!(json.contains("\"schema_version\":1"));
-        let decoded: SchemaEnvelope<alloc::vec::Vec<String>> =
-            serde_json::from_str(&json).expect("decode");
+        let decoded: SchemaEnvelope<Vec<String>> = serde_json::from_str(&json).expect("decode");
         assert_eq!(decoded, envelope);
     }
 

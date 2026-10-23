@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn slugs_are_unique_uppercase_without_spaces() {
-        let mut slugs: alloc::vec::Vec<&str> = Category::ALL
+        let mut slugs: Vec<&str> = Category::ALL
             .iter()
             .map(|category| category.as_slug())
             .collect();

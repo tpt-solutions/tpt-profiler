@@ -108,7 +108,7 @@ pub fn collect_estimates(criterion_dir: &Path) -> BTreeMap<String, CriterionEsti
 #[must_use]
 pub fn to_measurements(
     estimates: &BTreeMap<String, CriterionEstimate>,
-    source: MeasurementSource,
+    source: &MeasurementSource,
     now: UnixSeconds,
 ) -> Vec<Measurement> {
     const NANOS_PER_SECOND: f64 = 1_000_000_000.0;
@@ -178,7 +178,7 @@ mod tests {
                 standard_deviation: 1.0e8,
             },
         );
-        let measurements = to_measurements(&estimates, MeasurementSource::Criterion, 0);
+        let measurements = to_measurements(&estimates, &MeasurementSource::Criterion, 0);
         assert_eq!(measurements.len(), 1);
         assert_eq!(measurements[0].metric, "decode::frame_bench_mean");
         assert!((measurements[0].value - 4.9).abs() < f64::EPSILON, "ns → s");

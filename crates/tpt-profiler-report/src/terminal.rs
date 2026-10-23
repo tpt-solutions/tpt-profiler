@@ -55,7 +55,7 @@ pub fn render_opportunities(
             .priority
             .map_or_else(|| String::from("n/a"), |priority| priority.to_string());
         out.push_str(&heading(
-            format!(
+            &format!(
                 "#{rank} {} — {} [priority {}]",
                 category_label(opportunity),
                 opportunity.component,
@@ -64,20 +64,20 @@ pub fn render_opportunities(
             options,
         ));
         out.push_str(&item(
-            format!("Function/Component: {}", opportunity.component),
+            &format!("Function/Component: {}", opportunity.component),
             options,
         ));
         out.push_str(&item(
-            format!("Impact: {}/10", opportunity.impact.value()),
+            &format!("Impact: {}/10", opportunity.impact.value()),
             options,
         ));
         out.push_str(&item(
-            format!("Confidence: {}", opportunity.confidence),
+            &format!("Confidence: {}", opportunity.confidence),
             options,
         ));
-        out.push_str(&item(format!("Effort: {}", opportunity.effort), options));
+        out.push_str(&item(&format!("Effort: {}", opportunity.effort), options));
         out.push_str(&item(
-            format!(
+            &format!(
                 "Basis: {}",
                 match opportunity.kind {
                     tpt_profiler_model::FindingKind::Deterministic => {
@@ -91,7 +91,7 @@ pub fn render_opportunities(
             options,
         ));
         out.push_str(&item(
-            wrap(&opportunity.description, options.width.saturating_sub(4)),
+            &wrap(&opportunity.description, options.width.saturating_sub(4)),
             options,
         ));
         out.push('\n');
@@ -103,7 +103,7 @@ fn category_label(opportunity: &Opportunity) -> &'static str {
     opportunity.category.as_slug()
 }
 
-fn heading(line: String, options: &TerminalOptions) -> String {
+fn heading(line: &str, options: &TerminalOptions) -> String {
     if options.colour {
         format!("\x1b[1;33m{line}\x1b[0m\n")
     } else {
@@ -111,7 +111,7 @@ fn heading(line: String, options: &TerminalOptions) -> String {
     }
 }
 
-fn item(line: String, options: &TerminalOptions) -> String {
+fn item(line: &str, options: &TerminalOptions) -> String {
     let _ = options;
     format!("    {line}\n")
 }
@@ -250,7 +250,7 @@ mod tests {
     fn wrap_respects_width() {
         let wrapped = wrap("alpha beta gamma delta", 11);
         assert_eq!(wrapped, "alpha beta\ngamma delta");
-        assert!(wrap("aaaaaaaaaaaa", 5).chars().count() == 5);
+        assert_eq!(wrap("aaaaaaaaaaaa", 5).chars().count(), 5);
         assert_eq!(wrap("untouched", 0), "untouched");
     }
 }

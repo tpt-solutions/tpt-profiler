@@ -3,7 +3,7 @@
 //!
 //! A single benchmark execution is never definitive (spec §50, §75): the
 //! runner discards warm-up samples, and the summary maps sample spread to
-//! a [`Confidence`] so downstream scoring can never over-claim.
+//! a [`tpt_profiler_model::Confidence`] so downstream scoring can never over-claim.
 
 /// Summary of a set of duration/value samples (spec §50).
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +44,10 @@ impl Summary {
     /// Summarises samples; `None` when empty. Warm-up samples must be
     /// removed by the caller before this point.
     #[must_use]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "sample counts are far below 2^52"
+    )]
     pub fn from_samples(samples: &[f64]) -> Option<Self> {
         if samples.is_empty() {
             return None;
@@ -54,7 +58,7 @@ impl Summary {
         let median = if n % 2 == 1 {
             values[n / 2]
         } else {
-            (values[n / 2 - 1] + values[n / 2]) / 2.0
+            f64::midpoint(values[n / 2 - 1], values[n / 2])
         };
         let mean = values.iter().sum::<f64>() / n as f64;
         let variance = if n > 1 {
@@ -158,12 +162,17 @@ fn hinge(sorted: &[f64], upper: bool) -> f64 {
         return sorted[0];
     }
     let middle = n / 2;
-    let (start, end) = if upper { ((n + 1) / 2, n) } else { (0, middle) };
+    let (start, end) = if upper {
+        (n.div_ceil(2), n)
+    } else {
+        (0, middle)
+    };
     let half = &sorted[start..end];
     half[half.len() / 2]
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp, reason = "fixtures are exact by construction")]
 mod tests {
     use super::*;
 
@@ -173,7 +182,9 @@ mod tests {
 
     #[test]
     fn summary_of_stable_samples_is_high_confidence() {
-        let stable: Vec<f64> = (0..20).map(|i| 100.0 + (i % 2) as f64 * 0.5).collect();
+        let stable: Vec<f64> = (0_u32..20)
+            .map(|i| 100.0 + f64::from(i % 2) * 0.5)
+            .collect();
         let summary = samples(&stable);
         assert_eq!(summary.n, 20);
         assert_eq!(summary.confidence(), tpt_profiler_model::Confidence::High);

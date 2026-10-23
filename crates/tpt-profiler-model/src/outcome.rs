@@ -70,16 +70,15 @@ mod tests {
 
     #[test]
     fn no_opportunity_is_not_an_error() {
-        let outcome: AnalysisOutcome<alloc::vec::Vec<u32>> = AnalysisOutcome::NoOpportunity;
+        let outcome: AnalysisOutcome<Vec<u32>> = AnalysisOutcome::NoOpportunity;
         assert!(outcome.is_no_opportunity());
         assert!(outcome.findings().is_none());
     }
 
     #[test]
     fn findings_are_preserved_through_map() {
-        let outcome: AnalysisOutcome<alloc::vec::Vec<u32>> =
-            AnalysisOutcome::Findings(alloc::vec![1, 2, 3]);
-        let doubled = outcome.map(|v| v.into_iter().map(|x| x * 2).collect::<alloc::vec::Vec<_>>());
+        let outcome: AnalysisOutcome<Vec<u32>> = AnalysisOutcome::Findings(alloc::vec![1, 2, 3]);
+        let doubled = outcome.map(|v| v.into_iter().map(|x| x * 2).collect::<Vec<_>>());
         assert_eq!(doubled.findings(), Some(&alloc::vec![2, 4, 6]));
     }
 
