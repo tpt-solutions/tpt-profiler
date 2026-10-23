@@ -60,26 +60,26 @@ timeout_ms = 60000            # default 60000
 
 | Key | Type | Default | Status in v0.1 |
 |-----|------|---------|----------------|
-| `runtime` | bool | `true` | Parsed and validated. Runtime execution is driven by the `runtime` command and `[[workloads]]`. |
+| `runtime` | bool | `true` | When `false`, the `runtime` command reports that it is disabled and runs no workloads. |
 | `memory` | bool | `true` | Parsed. Memory profiling is Phase 2. |
 | `cpu` | bool | `true` | Parsed. CPU profiling is Phase 2. |
-| `simd` | bool | `true` | Parsed. The SIMD detector is always active in `static`. |
-| `parallelism` | bool | `true` | Parsed. The parallelism detector is always active in `static`. |
+| `simd` | bool | `true` | When `false`, SIMD findings are dropped from `static`, `full`, and `opportunities`. |
+| `parallelism` | bool | `true` | When `false`, parallelism findings are dropped from the analysis. |
 
-Only the detector toggles are reserved for future gating; in v0.1 the
-static analysers always run.
+`memory` and `cpu` are reserved until their analyses exist (Phase 2). Every toggle can be
+turned off for one run with `--disable <mode>`.
 
 ## `[benchmarks]`
 
 | Key | Type | Default | Status in v0.1 |
 |-----|------|---------|----------------|
-| `enabled` | bool | `true` | Parsed. The `bench` command runs when invoked. |
+| `enabled` | bool | `true` | When `false`, the `bench` command reports that benchmarks are disabled and runs nothing. |
 
 ## `[ci]`
 
 | Key | Type | Default | Status in v0.1 |
 |-----|------|---------|----------------|
-| `enabled` | bool | `true` | Parsed. The `ci` command is Phase 3. |
+| `enabled` | bool | `true` | Reserved: there is no `ci` command until Phase 3. |
 | `fail_on_regression` | bool | `true` | Parsed. Applies to CI mode (Phase 3). |
 | `runtime_threshold` | float | `0.10` | Used by `compare` to decide what counts as a regression (fraction: `0.10` = 10%). |
 | `binary_threshold` | float | `0.05` | Reserved for binary-size analysis (Phase 2). |

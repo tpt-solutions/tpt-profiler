@@ -240,7 +240,7 @@
 - [x] CHANGELOG entry for 0.1.0 (under Unreleased; rename to 0.1.0 at release)
 - [ ] Tag and publish v0.1.0 — needs your go-ahead (outward-facing)
 - [ ] Follow-up: ALLOCATION findings dominate real-repo output (26 of 37 in tpt-mcpbox), mostly at priority ~11/100; review aggregation (§58) and priority thresholds
-- [ ] Follow-up: `[profiling]` toggles are parsed but do not gate anything; `Overrides` is not wired to CLI flags (§40)
+- [x] Follow-up: `[profiling]` and `[benchmarks]` toggles now gate runtime, bench, SIMD, and parallelism; `--disable <mode>` feeds `Overrides` (§40). `memory`, `cpu`, and `ci` remain reserved
 - [ ] Follow-up: loop-invariant detector still reports some findings in tpt-pulse; only a sample was reviewed, so review the rest for false positives
 
 ---

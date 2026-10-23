@@ -17,6 +17,7 @@ tpt-profiler [GLOBAL FLAGS] <COMMAND> [ARGS]
 | `--config <FILE>` | discovered | Use this `tpt-profiler.toml` instead of discovering one (see [config.md](config.md)). |
 | `--quiet` | off | Suppress informational output and warnings on stderr. Also disables colour. |
 | `--verbose` | off | Print diagnostics (file counts, parse errors, dependency findings) on stderr. |
+| `--disable <MODE>[,<MODE>…]` | none | Turn off modes for this run, overriding the config file: `runtime`, `memory`, `cpu`, `simd`, `parallelism`, `benchmarks`, `ci`. Only disables. |
 
 Colour is disabled when `NO_COLOR` is set (any value) or `--quiet` is given.
 Terminal width comes from `COLUMNS` (minimum 40; default 100).
