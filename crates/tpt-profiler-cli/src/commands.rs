@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use tpt_profiler::config::Config;
 use tpt_profiler::pipeline;
+use tpt_profiler_model::SchemaEnvelope;
 use tpt_profiler_report as report;
 
 /// Shared command context from global CLI flags.
@@ -79,22 +80,23 @@ impl Context {
     }
 
     fn emit(&self, text: &str) -> Result<(), Error> {
-        match &self.output {
-            Some(path) => {
-                std::fs::write(path, text).map_err(|error| {
-                    Error::Message(format!("could not write {}: {error}", path.display()))
-                })?;
-                if !self.quiet {
-                    eprintln!("written to {}", path.display());
-                }
-                Ok(())
-            }
-            None => {
-                println!("{text}");
-                Ok(())
-            }
+        let Some(path) = &self.output else {
+            println!("{text}");
+            return Ok(());
+        };
+        std::fs::write(path, text).map_err(|error| {
+            Error::Message(format!("could not write {}: {error}", path.display()))
+        })?;
+        if !self.quiet {
+            eprintln!("written to {}", path.display());
         }
+        Ok(())
     }
+}
+
+/// Schema-versioned generator name for JSON output (spec §69).
+fn generated_by() -> String {
+    format!("tpt-profiler {}", tpt_profiler::version())
 }
 
 /// `scan` — project structure tree (spec §7).
@@ -102,7 +104,7 @@ pub fn scan(context: &Context) -> CommandResult {
     let (repository, _root) = tpt_profiler::discovery::discover_repository(&context.path)?;
     let text = report::render_scan(&repository);
     if context.format == Format::Json {
-        let json = serde_json::to_string_pretty(&repository)?;
+        let json = serde_json::to_string_pretty(&SchemaEnvelope::new(generated_by(), &repository))?;
         context.emit(&json)
     } else {
         context.emit(&text)
@@ -156,7 +158,11 @@ fn emit_analysis(context: &Context, run: &pipeline::AnalysisRun) -> CommandResul
             context.emit(&text)
         }
         Format::Json => {
-            let json = serde_json::to_string_pretty(&run.repository)?;
+            let json = report::render_opportunities_json(
+                &generated_by(),
+                &run.repository.name,
+                &run.opportunities,
+            )?;
             context.emit(&json)
         }
         Format::Markdown => {
@@ -179,9 +185,9 @@ pub fn runtime(context: &Context) -> CommandResult {
                 duration_hint_ms: None,
                 repetitions: workload.repetitions,
             },
-            &context.path.join(&workload.command),
+            context.path.join(&workload.command),
         );
-        runnable.args = workload.args.clone();
+        runnable.args.clone_from(&workload.args);
         if let Some(warmup) = workload.warmup_runs {
             runnable.warmup_runs = warmup;
         }
@@ -191,7 +197,7 @@ pub fn runtime(context: &Context) -> CommandResult {
         let result = tpt_profiler_runtime::measure_workload(&runnable, None)?;
         for measurement in tpt_profiler_runtime::to_measurements(
             &result,
-            tpt_profiler_model::MeasurementSource::WallClock,
+            &tpt_profiler_model::MeasurementSource::WallClock,
             now_unix(),
             Some(&environment),
         ) {
@@ -236,7 +242,7 @@ pub fn bench(context: &Context) -> CommandResult {
     }
     let measurements = tpt_profiler_bench::to_measurements(
         &bench_report.estimates,
-        tpt_profiler_model::MeasurementSource::Criterion,
+        &tpt_profiler_model::MeasurementSource::Criterion,
         now_unix(),
     );
     let lines: Vec<String> = measurements
@@ -336,7 +342,7 @@ pub fn opportunities(
 ) -> CommandResult {
     let config = context.load_config()?;
     let run = pipeline::analyse(&context.path, &config)?;
-    if run.no_opportunities {
+    if run.no_opportunities && context.format == Format::Terminal {
         return context.emit("No opportunities detected.");
     }
     let mut opportunities = run.opportunities.clone();
@@ -355,7 +361,11 @@ pub fn opportunities(
             context.emit(&text)
         }
         Format::Json => {
-            let json = serde_json::to_string_pretty(&run.repository)?;
+            let json = report::render_opportunities_json(
+                &generated_by(),
+                &run.repository.name,
+                &opportunities,
+            )?;
             context.emit(&json)
         }
         Format::Markdown => {
@@ -385,7 +395,9 @@ pub fn explain(context: &Context, id: &str) -> CommandResult {
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs() as i64)
+        .map_or(0, |duration| {
+            i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
+        })
 }
 
 /// Terminal width: `COLUMNS` when set, else the 100-column default

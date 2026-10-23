@@ -104,3 +104,115 @@ fn completions_generate_for_bash() {
     let stdout = String::from_utf8(output.stdout).expect("utf8");
     assert!(stdout.contains("tpt-profiler"), "{stdout}");
 }
+
+/// A temporary project whose single source file is the given corpus
+/// pattern, so the pipeline has known-detectable findings to report.
+struct CorpusProject(std::path::PathBuf);
+
+impl CorpusProject {
+    fn new(name: &str, corpus_file: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("tpt-cli-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("src")).expect("create src");
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"corpus-project\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .expect("write manifest");
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tpt-profiler-static/tests/corpus")
+            .join(corpus_file);
+        std::fs::copy(source, root.join("src").join("lib.rs")).expect("copy corpus");
+        Self(root)
+    }
+
+    fn path(&self) -> &str {
+        self.0.to_str().expect("utf8 temp path")
+    }
+}
+
+impl Drop for CorpusProject {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn man_page_is_roff_for_the_binary() {
+    let output = binary().arg("man").output().expect("run");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("utf8");
+    assert!(stdout.contains(".TH tpt-profiler 1"), "{stdout}");
+}
+
+#[test]
+fn json_opportunities_are_wrapped_in_the_schema_envelope() {
+    let project = CorpusProject::new("json", "hot_loop.rs");
+    let output = binary()
+        .args([
+            "--path",
+            project.path(),
+            "--quiet",
+            "--format",
+            "json",
+            "opportunities",
+        ])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    let value: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout is JSON, not prose");
+    assert_eq!(value["schema_version"], 1);
+    assert!(
+        value["generated_by"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("tpt-profiler "))
+    );
+    let entries = value["data"]["opportunities"].as_array().expect("array");
+    assert!(!entries.is_empty(), "hot_loop corpus has findings");
+    assert!(entries[0]["id"].as_str().is_some_and(|id| id.contains('-')));
+}
+
+#[test]
+fn json_with_no_opportunities_is_an_empty_list_not_prose() {
+    let output = binary()
+        .args([
+            "--path",
+            fixture(),
+            "--quiet",
+            "--format",
+            "json",
+            "opportunities",
+        ])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("stdout is JSON");
+    assert_eq!(value["data"]["opportunities"], serde_json::json!([]));
+}
+
+#[test]
+fn output_flag_writes_the_report_to_a_file() {
+    let project = CorpusProject::new("output", "clean.rs");
+    let target = project.0.join("report.json");
+    let output = binary()
+        .args([
+            "--path",
+            project.path(),
+            "--quiet",
+            "--format",
+            "json",
+            "--output",
+            target.to_str().expect("utf8"),
+            "static",
+        ])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    assert!(
+        output.stdout.is_empty(),
+        "nothing on stdout when --output is set"
+    );
+    let written = std::fs::read_to_string(&target).expect("report written");
+    assert!(written.contains("\"schema_version\""), "{written}");
+}

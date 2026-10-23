@@ -12,6 +12,9 @@ readme = "../../README.md"
 [[bin]]
 name = "tpt-profiler"
 path = "src/main.rs"
+# Shares its name with the `tpt-profiler` library; skip rustdoc for the bin
+# to avoid the output-filename collision.
+doc = false
 
 [dependencies]
 tpt-profiler.workspace = true
@@ -22,6 +25,7 @@ tpt-profiler-report.workspace = true
 tpt-profiler-runtime.workspace = true
 clap.workspace = true
 clap_complete = "4"
+clap_mangen = "0.2"
 serde_json.workspace = true
 
 [dev-dependencies]

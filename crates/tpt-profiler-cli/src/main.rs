@@ -109,6 +109,8 @@ enum CliCommand {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Print the man page (roff) to stdout, e.g. `tpt-profiler man > tpt-profiler.1`.
+    Man,
 }
 
 /// `--strategy` values (spec §59).
@@ -159,6 +161,11 @@ fn main() -> ExitCode {
             clap_complete::generate(shell, &mut cmd, "tpt-profiler", &mut std::io::stdout());
             Ok(())
         }
+        CliCommand::Man => clap_mangen::Man::new(Cli::command())
+            .render(&mut std::io::stdout())
+            .map_err(|error| {
+                commands::Error::Message(format!("could not render man page: {error}"))
+            }),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
