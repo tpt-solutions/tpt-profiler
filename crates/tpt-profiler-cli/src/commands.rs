@@ -263,31 +263,18 @@ pub fn runtime(context: &Context) -> CommandResult {
 
 /// `bench` — run benchmarks and ingest Criterion (spec §8.3).
 pub fn bench(context: &Context) -> CommandResult {
-    if !context.load_config()?.benchmarks.enabled {
+    let config = context.load_config()?;
+    let Some(outcome) = tpt_profiler::measure::collect_benches(&context.path, &config, now_unix())?
+    else {
         return context.emit(
             "benchmarks are disabled ([benchmarks] enabled = false or --disable benchmarks)",
         );
-    }
-    let (repository, workspace_root) = tpt_profiler::discovery::discover_repository(&context.path)?;
-    let infos: Vec<tpt_profiler_model::hierarchy::CrateInfo> = repository
-        .projects
-        .iter()
-        .flat_map(|project| project.crates.clone())
-        .collect();
-    let bench_report = tpt_profiler_bench::run_benches(
-        &workspace_root,
-        &infos,
-        std::time::Duration::from_secs(1800),
-    )?;
-    if bench_report.no_benchmarks {
+    };
+    if outcome.no_benchmarks {
         return context.emit("No benchmarks found (spec §8.3: this is a result, not a failure).");
     }
-    let measurements = tpt_profiler_bench::to_measurements(
-        &bench_report.estimates,
-        &tpt_profiler_model::MeasurementSource::Criterion,
-        now_unix(),
-    );
-    let lines: Vec<String> = measurements
+    let lines: Vec<String> = outcome
+        .measurements
         .iter()
         .map(|measurement| {
             format!(
@@ -304,9 +291,9 @@ pub fn bench(context: &Context) -> CommandResult {
 }
 
 /// Builds the run record for `baseline`, `compare` and `ci`: static
-/// findings plus the runtime measurements from configured workloads
-/// (spec §8.2, §36). The workload outcomes are returned too, so callers can
-/// report failed runs.
+/// findings plus runtime measurements from configured workloads and bench
+/// measurements from Criterion (spec §8.2, §8.3, §36). The workload outcomes
+/// are returned too, so callers can report failed runs.
 fn measured_profile(
     context: &Context,
     config: &Config,
@@ -328,6 +315,10 @@ fn measured_profile(
         profile
             .measurements
             .extend(outcome.measurements.iter().cloned());
+    }
+    if let Some(benches) = tpt_profiler::measure::collect_benches(&context.path, config, timestamp)?
+    {
+        profile.measurements.extend(benches.measurements);
     }
     Ok((profile, outcomes))
 }
@@ -466,7 +457,7 @@ pub fn ci(context: &Context, name: &str) -> CommandResult {
 
     if tpt_profiler::ci::failed(&outcomes) {
         return Err(Error::Message(format!(
-            "CI policy failed against `{name}` (see FAIL lines above)"
+            "CI policy failed against `{name}`: a configured regression was detected"
         )));
     }
     Ok(())

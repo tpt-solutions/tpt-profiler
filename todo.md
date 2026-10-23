@@ -159,7 +159,7 @@
 - [x] Workload definitions in config — `[[workloads]]` section (name/command/args/repetitions/warmup_runs/timeout_ms)
 - [x] Run workloads and collect wall/CPU time (wall time per run; CPU time via external profilers lands in Phase 2)
 - [x] Execute `cargo bench` and discover results (`bench::run_benches`, bench-target discovery via CrateInfo.has_benches)
-- [x] Criterion integration — parses `target/criterion/**/new/estimates.json` (mean with median fallback), ns → s conversion
+- [x] Criterion integration — parses `target/criterion/**/new/estimates.json` (mean with median fallback), ns → s conversion. Corrected in Phase 3.1: the parser previously expected a field Criterion never writes, so real output was silently ignored; it now reads the real shape, walks nested groups, and derives confidence from the mean's interval
 - [x] Graceful behaviour when Criterion absent (§74) — absent benches → `no_benchmarks` result, absent criterion dir → empty estimates, missing cargo → `ToolUnavailable`
 - [x] Statistical engine (§50) — repeats, mean/median/stddev/min/max, 95% CI (normal approx, documented), Tukey-hinge 1.5×IQR outlier rejection, warm-up discard, cold-start recorded separately
 - [x] Never treat a single execution as definitive — single sample is always `Low` confidence
@@ -338,7 +338,7 @@
 ### 3.1 CI mode (§39)
 - [x] `ci` command — runs workloads, judges against a named baseline, exits `1` on a configured regression
 - [x] `[ci]` config: `fail_on_regression`, `runtime_threshold`, `binary_threshold` (binary threshold parsed; binary analysis is Phase 2.5)
-- [~] Policies: fail on runtime regression ✓; warn on binary size (needs 2.5); warn on new HIGH opportunity (needs opportunity tracking, 3.4); fail on critical benchmark regression (bench measurements not in baselines yet)
+- [~] Policies: fail on runtime regression ✓; fail on benchmark regression ✓ (any benchmark, not a per-benchmark "critical" marker yet); warn on binary size (needs 2.5); warn on new HIGH opportunity (needs opportunity tracking, 3.4)
 - [x] CI-friendly output (GitHub Actions annotations, summary) — `--format github-annotations` (`::notice` per opportunity) and `--summary <FILE>` (appends Markdown, e.g. to `$GITHUB_STEP_SUMMARY`)
 - [x] Exit codes per policy outcome — fail → `1`; warn and info never change the exit code
 - [x] Example workflow files for GitHub Actions — `docs/examples/github-actions.yml`

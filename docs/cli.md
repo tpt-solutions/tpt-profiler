@@ -62,6 +62,11 @@ Runs `cargo bench` for the workspace and ingests Criterion results from
 exist, or Criterion produced no data, the command reports that as a result
 and exits `0`.
 
+Each benchmark's mean is a measurement named `<benchmark>_bench_mean`. Its
+confidence comes from the relative half-width of Criterion's 95% interval on
+the mean: `High` up to 2%, `Medium` up to 5%, `Low` beyond that (spec §50).
+`baseline`, `compare`, and `ci` include these measurements as well.
+
 ### `baseline [NAME]`
 
 Saves the current analysis as a named baseline under
@@ -78,8 +83,9 @@ Exits `1` with guidance if the baseline does not exist.
 
 ### `ci [NAME]`
 
-Runs the configured `[[workloads]]` (spec §23), then applies the `[ci]` policy
-to the comparison against a named baseline (default `default`) (spec §39):
+Runs the configured `[[workloads]]` (spec §23) and benchmarks (when
+`[benchmarks] enabled`), then applies the `[ci]` policy to the comparison
+against a named baseline (default `default`) (spec §39):
 
 * a regressed metric **fails** the run when `fail_on_regression = true`, and
   warns otherwise;

@@ -55,7 +55,12 @@ fn main() {
         "mean": {
             "confidence_interval": { "confidence_level": 0.95, "lower_bound": 1400.0, "upper_bound": 1600.0 },
             "point_estimate": 1500.0,
-            "standard_deviation": 50.0
+            "standard_error": 25.0
+        },
+        "std_dev": {
+            "confidence_interval": { "confidence_level": 0.95, "lower_bound": 40.0, "upper_bound": 60.0 },
+            "point_estimate": 50.0,
+            "standard_error": 2.0
         }
     }"#;
     std::fs::write(dir.join("estimates.json"), json).expect("write estimates");

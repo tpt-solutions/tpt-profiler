@@ -142,14 +142,22 @@ impl Summary {
         if self.n < 2 {
             return Confidence::Low;
         }
-        let cv = self.coefficient_of_variation();
-        if cv <= MAX_CV_HIGH {
-            Confidence::High
-        } else if cv <= MAX_CV_MEDIUM {
-            Confidence::Medium
-        } else {
-            Confidence::Low
-        }
+        confidence_for_cv(self.coefficient_of_variation())
+    }
+}
+
+/// Confidence implied by a coefficient of variation (spec §50): the tighter
+/// the spread of the samples, the more the mean can be trusted. Shared by
+/// runtime and bench measurements so both use the same standard.
+#[must_use]
+pub fn confidence_for_cv(cv: f64) -> tpt_profiler_model::Confidence {
+    use tpt_profiler_model::Confidence;
+    if cv <= MAX_CV_HIGH {
+        Confidence::High
+    } else if cv <= MAX_CV_MEDIUM {
+        Confidence::Medium
+    } else {
+        Confidence::Low
     }
 }
 
