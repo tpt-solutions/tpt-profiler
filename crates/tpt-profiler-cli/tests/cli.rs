@@ -216,3 +216,65 @@ fn output_flag_writes_the_report_to_a_file() {
     let written = std::fs::read_to_string(&target).expect("report written");
     assert!(written.contains("\"schema_version\""), "{written}");
 }
+
+#[test]
+fn disable_simd_removes_simd_opportunities() {
+    let project = CorpusProject::new("disable-simd", "hot_loop.rs");
+    let categories = |args: &[&str]| -> Vec<String> {
+        let output = binary()
+            .args(["--path", project.path(), "--quiet", "--format", "json"])
+            .args(args)
+            .output()
+            .expect("run");
+        assert!(output.status.success());
+        let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("json");
+        value["data"]["opportunities"]
+            .as_array()
+            .expect("array")
+            .iter()
+            .filter_map(|entry| entry["category"].as_str().map(str::to_owned))
+            .collect()
+    };
+    assert!(categories(&["opportunities"]).iter().any(|c| c == "SIMD"));
+    assert!(
+        !categories(&["--disable", "simd", "opportunities"])
+            .iter()
+            .any(|c| c == "SIMD")
+    );
+}
+
+#[test]
+fn disabled_runtime_says_so_instead_of_running_workloads() {
+    let output = binary()
+        .args([
+            "--path",
+            fixture(),
+            "--quiet",
+            "--disable",
+            "runtime",
+            "runtime",
+        ])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("utf8");
+    assert!(stdout.contains("runtime profiling is disabled"), "{stdout}");
+}
+
+#[test]
+fn disabled_benchmarks_are_not_run() {
+    let output = binary()
+        .args([
+            "--path",
+            fixture(),
+            "--quiet",
+            "--disable",
+            "benchmarks",
+            "bench",
+        ])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("utf8");
+    assert!(stdout.contains("benchmarks are disabled"), "{stdout}");
+}

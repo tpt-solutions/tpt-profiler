@@ -5,7 +5,7 @@
 use std::fmt;
 use std::path::PathBuf;
 
-use tpt_profiler::config::Config;
+use tpt_profiler::config::{Config, Overrides};
 use tpt_profiler::pipeline;
 use tpt_profiler_model::SchemaEnvelope;
 use tpt_profiler_report as report;
@@ -18,6 +18,8 @@ pub struct Context {
     pub path: PathBuf,
     pub quiet: bool,
     pub verbose: bool,
+    /// Modes turned off by `--disable` (spec §40).
+    pub overrides: Overrides,
 }
 
 /// Output formats (spec §42).
@@ -67,10 +69,12 @@ impl Context {
     /// Loads the configuration: explicit `--config` wins, otherwise
     /// discovery from `--path` (flags > config > defaults, spec §40).
     fn load_config(&self) -> Result<Config, Error> {
-        match &self.config_path {
-            Some(path) => Ok(Config::load(path)?),
-            None => Ok(Config::load_discovered(&self.path)?.0),
-        }
+        let mut config = match &self.config_path {
+            Some(path) => Config::load(path)?,
+            None => Config::load_discovered(&self.path)?.0,
+        };
+        config.apply_overrides(&self.overrides);
+        Ok(config)
     }
 
     /// Colour is safe only when NO_COLOR is unset (spec §42); tty
@@ -175,6 +179,11 @@ fn emit_analysis(context: &Context, run: &pipeline::AnalysisRun) -> CommandResul
 /// `runtime` — execute configured workloads (spec §8.2).
 pub fn runtime(context: &Context) -> CommandResult {
     let config = context.load_config()?;
+    if !config.profiling.runtime {
+        return context.emit(
+            "runtime profiling is disabled (profiling.runtime = false or --disable runtime)",
+        );
+    }
     let environment = tpt_profiler::environment::capture_environment(Some(&context.path));
     let mut lines = Vec::new();
     for workload in &config.workloads {
@@ -226,6 +235,11 @@ pub fn runtime(context: &Context) -> CommandResult {
 
 /// `bench` — run benchmarks and ingest Criterion (spec §8.3).
 pub fn bench(context: &Context) -> CommandResult {
+    if !context.load_config()?.benchmarks.enabled {
+        return context.emit(
+            "benchmarks are disabled ([benchmarks] enabled = false or --disable benchmarks)",
+        );
+    }
     let (repository, workspace_root) = tpt_profiler::discovery::discover_repository(&context.path)?;
     let infos: Vec<tpt_profiler_model::hierarchy::CrateInfo> = repository
         .projects

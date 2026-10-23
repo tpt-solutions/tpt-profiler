@@ -16,7 +16,7 @@ use tpt_profiler_model::error::Error;
 use tpt_profiler_model::hierarchy::Repository;
 use tpt_profiler_model::{AnalysisOutcome, Category, Evidence, Opportunity, ProfileRun};
 
-use crate::config::Config;
+use crate::config::{Config, ProfilingConfig};
 use crate::deps::{self, DependencyFinding, DependencyReport};
 use crate::discovery::{discover_repository, load_metadata};
 use tpt_profiler_static::{Finding, StaticEngine, StaticReport};
@@ -62,6 +62,7 @@ pub fn analyse_with(
     candidates.extend(findings_to_candidates(
         &repository.name,
         &static_report.findings,
+        config.profiling,
     ));
     candidates.extend(dependency_candidates(&repository.name, &dependency_report));
 
@@ -104,13 +105,21 @@ pub fn to_profile_run(
     profile
 }
 
-/// Maps static findings onto engine candidates.
+/// Maps static findings onto engine candidates, dropping the categories
+/// whose `[profiling]` toggle is off (spec §40). Categories without a
+/// toggle are always kept.
 fn findings_to_candidates(
     repository: &str,
     findings: &[Finding],
+    profiling: ProfilingConfig,
 ) -> Vec<tpt_profiler_opportunity::Candidate> {
     findings
         .iter()
+        .filter(|finding| match finding.category {
+            Category::Simd => profiling.simd,
+            Category::Parallelism => profiling.parallelism,
+            _ => true,
+        })
         .map(|finding| {
             let mut candidate = tpt_profiler_opportunity::Candidate::new(
                 repository,

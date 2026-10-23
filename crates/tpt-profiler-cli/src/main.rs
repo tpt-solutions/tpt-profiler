@@ -44,6 +44,18 @@ struct Cli {
     /// Verbose diagnostics on stderr.
     #[arg(long, global = true)]
     verbose: bool,
+
+    /// Turn off profiling or benchmark modes for this run, overriding the
+    /// config file (spec §40: flags > config > defaults). Comma-separated;
+    /// this only disables, so enable modes in `tpt-profiler.toml`.
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "MODE",
+        global = true
+    )]
+    disable: Vec<Mode>,
 }
 
 /// Report-producing output formats (spec §42).
@@ -129,6 +141,35 @@ impl From<StrategyArg> for tpt_profiler_opportunity::Strategy {
     }
 }
 
+/// Modes that `--disable` can turn off (spec §40).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Mode {
+    Runtime,
+    Memory,
+    Cpu,
+    Simd,
+    Parallelism,
+    Benchmarks,
+    Ci,
+}
+
+/// Maps `--disable` modes onto config overrides (flags > config).
+fn overrides_from(disabled: &[Mode]) -> tpt_profiler::config::Overrides {
+    let mut overrides = tpt_profiler::config::Overrides::default();
+    for mode in disabled {
+        match mode {
+            Mode::Runtime => overrides.profiling_runtime = Some(false),
+            Mode::Memory => overrides.profiling_memory = Some(false),
+            Mode::Cpu => overrides.profiling_cpu = Some(false),
+            Mode::Simd => overrides.profiling_simd = Some(false),
+            Mode::Parallelism => overrides.profiling_parallelism = Some(false),
+            Mode::Benchmarks => overrides.benchmarks_enabled = Some(false),
+            Mode::Ci => overrides.ci_enabled = Some(false),
+        }
+    }
+    overrides
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let context = commands::Context {
@@ -142,6 +183,7 @@ fn main() -> ExitCode {
         path: cli.path,
         quiet: cli.quiet,
         verbose: cli.verbose,
+        overrides: overrides_from(&cli.disable),
     };
     let result = match cli.command {
         CliCommand::Scan => commands::scan(&context),
