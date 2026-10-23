@@ -156,7 +156,7 @@ impl Summary {
 /// Tukey's hinge: the median of the lower (or upper) half of a sorted
 /// slice, excluding the overall median element for odd lengths.
 fn hinge(sorted: &[f64], upper: bool) -> f64 {
-    debug_assert!(!sorted.is_empty());
+    debug_assert_ne!(sorted, []);
     let n = sorted.len();
     if n == 1 {
         return sorted[0];

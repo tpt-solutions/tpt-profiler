@@ -221,7 +221,7 @@ fn is_direct_build_dep(metadata: &Metadata, id: &PackageId) -> bool {
 }
 
 fn package_name(metadata: &Metadata, id: &PackageId) -> String {
-    package_of(metadata, id).map_or_else(String::new, |package| package.name.clone())
+    package_of(metadata, id).map_or_else(String::new, |package| package.name.to_string())
 }
 
 /// Unique transitive subtree size per node (memoised DFS).

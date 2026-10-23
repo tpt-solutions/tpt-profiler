@@ -124,7 +124,7 @@ fn map_package(package: &Package, workspace_root: &Path) -> CrateInfo {
     binaries.sort();
 
     CrateInfo {
-        name: package.name.clone(),
+        name: package.name.to_string(),
         version: package.version.to_string(),
         manifest_path: package.manifest_path.to_string(),
         modules: Vec::new(), // filled by the static analysis engine (spec §9)
