@@ -120,7 +120,7 @@ impl<'ast> Visit<'ast> for UnsafeVisitor {
     fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
         let start = line_of(item);
         let end = u32::try_from(item.span().end().line).unwrap_or(u32::MAX);
-        if item.sig.unsafety.is_some() && end >= start {
+        if matches!(item.sig.safety, syn::Safety::Unsafe(_)) && end >= start {
             self.ranges.push((start, end));
         }
         visit::visit_item_fn(self, item);
