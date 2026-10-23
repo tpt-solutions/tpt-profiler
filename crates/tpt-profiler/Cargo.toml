@@ -11,6 +11,13 @@ readme = "../../README.md"
 keywords = ["profiling", "performance", "optimisation"]
 categories = ["development-tools"]
 
+[features]
+# The core crate performs filesystem and `cargo metadata` work, so it is
+# std-only; the `std` feature forwards to the model crate so embedders can
+# keep the whole dependency tree on one std setting (spec §73).
+default = ["std"]
+std = ["tpt-profiler-model/std"]
+
 [dependencies]
 tpt-profiler-model = { workspace = true, features = ["serde"] }
 tpt-profiler-opportunity.workspace = true

@@ -13,7 +13,10 @@ pub mod markdown;
 pub mod scan;
 pub mod terminal;
 
-pub use json::{opportunity_summary, render_json, render_summary_json, schema_version};
+pub use json::{
+    opportunity_summary, render_json, render_opportunities_json, render_summary_json,
+    schema_version, summarise,
+};
 pub use markdown::render_markdown;
 pub use scan::render_scan;
 pub use terminal::{TerminalOptions, render_opportunities, wrap};

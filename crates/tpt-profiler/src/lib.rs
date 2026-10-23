@@ -10,8 +10,21 @@
 //! depend on all analysis crates; embedders should depend on this crate
 //! rather than the internals.
 //!
-//! **Status:** the data model and configuration are in place; the
-//! pipeline lands with the MVP (spec §62).
+//! # Example
+//!
+//! ```
+//! use std::path::Path;
+//! use tpt_profiler::{config::Config, pipeline};
+//!
+//! let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/single-crate");
+//! let run = pipeline::analyse(&root, &Config::default())?;
+//! for opportunity in &run.opportunities {
+//!     println!("{} {}", opportunity.id, opportunity.description);
+//! }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! Runnable version: `cargo run -p tpt-profiler --example analyse -- <path>`.
 
 pub mod baseline;
 pub mod config;

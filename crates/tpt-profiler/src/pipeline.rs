@@ -39,11 +39,21 @@ pub struct AnalysisRun {
     pub no_opportunities: bool,
 }
 
-/// Runs the full static-side pipeline over the project at `root`
-/// (spec §62 MVP scope).
+/// Runs the full static-side pipeline over the project at `root` with
+/// the built-in analyzers (spec §62 MVP scope).
 pub fn analyse(root: &Path, config: &Config) -> Result<AnalysisRun, Error> {
+    analyse_with(root, config, &StaticEngine::with_default_analyzers())
+}
+
+/// Like [`analyse`], but with a caller-supplied static engine, so custom
+/// analyzers registered via [`StaticEngine::register`] take part in the
+/// run (spec §67 analyzer seam).
+pub fn analyse_with(
+    root: &Path,
+    config: &Config,
+    engine: &StaticEngine,
+) -> Result<AnalysisRun, Error> {
     let (repository, workspace_root) = discover_repository(root)?;
-    let engine = StaticEngine::with_default_analyzers();
     let static_report = engine.analyze_path(&workspace_root)?;
     let metadata = load_metadata(root)?;
     let dependency_report = deps::analyze(&metadata);
@@ -90,7 +100,7 @@ pub fn to_profile_run(
     environment: tpt_profiler_model::Environment,
 ) -> ProfileRun {
     let mut profile = ProfileRun::new(run_id, started_at, environment);
-    profile.opportunities = run.opportunities.clone();
+    profile.opportunities.clone_from(&run.opportunities);
     profile
 }
 

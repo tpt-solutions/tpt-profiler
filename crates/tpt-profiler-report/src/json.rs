@@ -3,7 +3,7 @@
 //! they consume.
 
 use serde::Serialize;
-use tpt_profiler_model::{ProfileRun, SCHEMA_VERSION, SchemaEnvelope};
+use tpt_profiler_model::{Opportunity, ProfileRun, SCHEMA_VERSION, SchemaEnvelope};
 
 /// Encodes a profile run as pretty-printed JSON under the schema
 /// envelope (spec §69): `{"schema_version": 1, "generated_by": …,
@@ -60,10 +60,18 @@ pub struct OpportunitySummaryEntry<'a> {
 /// Builds the summary envelope for a run's opportunities.
 #[must_use]
 pub fn opportunity_summary(run: &ProfileRun) -> OpportunitySummary<'_> {
+    summarise(&run.id, &run.opportunities)
+}
+
+/// Builds the summary for an explicit repository name and opportunity list.
+#[must_use]
+pub fn summarise<'a>(
+    repository: &'a str,
+    opportunities: &'a [Opportunity],
+) -> OpportunitySummary<'a> {
     OpportunitySummary {
-        repository: &run.id, // the run is identified by its repository run id
-        opportunities: run
-            .opportunities
+        repository,
+        opportunities: opportunities
             .iter()
             .map(|opportunity| OpportunitySummaryEntry {
                 id: opportunity.id.as_str(),
@@ -80,6 +88,20 @@ pub fn opportunity_summary(run: &ProfileRun) -> OpportunitySummary<'_> {
             })
             .collect(),
     }
+}
+
+/// Encodes ranked opportunities as pretty-printed JSON under the schema
+/// envelope (spec §42, §69).
+///
+/// # Errors
+/// Fails when the summary cannot be serialised.
+pub fn render_opportunities_json(
+    generated_by: &str,
+    repository: &str,
+    opportunities: &[Opportunity],
+) -> Result<String, serde_json::Error> {
+    let envelope = SchemaEnvelope::new(generated_by, summarise(repository, opportunities));
+    serde_json::to_string_pretty(&envelope)
 }
 
 /// Encodes the opportunity summary as JSON.
