@@ -25,14 +25,33 @@ truth). v0.1.0 targets the MVP scope of spec §62.
 * Terminal, JSON, and Markdown reports
 * Fully local operation: no telemetry, no source upload, ever
 
-## Quick start (once released)
+## Quick start
+
+From a checkout (crates.io release pending):
 
 ```bash
-cargo install tpt-profiler-cli
-tpt-profiler scan .        # discover project structure
-tpt-profiler full          # run all applicable analyses
-tpt-profiler opportunities --strategy=highest-value
+cargo install --path crates/tpt-profiler-cli
+
+tpt-profiler scan                        # discover the project structure
+tpt-profiler static                      # rank static-analysis opportunities
+tpt-profiler opportunities --top 5       # highest-value first
+tpt-profiler explain ALLOCATION-0514     # full reasoning; prefixes work
+
+tpt-profiler --format json opportunities # machine-readable, schema-versioned
 ```
+
+Runtime and benchmark measurements are opt-in because they run project code:
+
+```bash
+tpt-profiler runtime                     # needs [[workloads]] in tpt-profiler.toml
+tpt-profiler bench                       # runs `cargo bench`, reads Criterion output
+tpt-profiler baseline before-change      # save measurements
+tpt-profiler compare before-change       # % change, noise-aware
+```
+
+Documentation: [CLI reference](docs/cli.md) · [configuration](docs/config.md) ·
+[JSON schema](docs/json-schema.md). Shell completions and a man page come
+from `tpt-profiler completions <shell>` and `tpt-profiler man`.
 
 ## Repository layout
 

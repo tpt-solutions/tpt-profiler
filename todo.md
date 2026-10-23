@@ -205,40 +205,43 @@
 - [x] Tests for compare output (golden) — improved/regressed/unchanged/noisy matrix + percent formatting
 
 ### 1.11 CLI (`tpt-profiler-cli`, §41)
-- [ ] Binary name `tpt-profiler`; clap-based command structure
-- [ ] `scan`
-- [ ] `static`
-- [ ] `runtime`
-- [ ] `bench`
-- [ ] `full` (all applicable analyses)
-- [ ] `baseline`
-- [ ] `compare`
-- [ ] `report`
-- [ ] `opportunities` with `--strategy`
-- [ ] `explain <id>`
-- [ ] Global flags: `--format`, `--output`, `--config`, `--path`, `--quiet`, `--verbose`
-- [ ] Shell completions
-- [ ] Meaningful exit codes
-- [ ] `--help` text and man page
-- [ ] CLI integration tests (assert_cmd-style)
+- [x] Binary name `tpt-profiler`; clap-based command structure
+- [x] `scan`
+- [x] `static`
+- [x] `runtime`
+- [x] `bench`
+- [x] `full` (all applicable analyses)
+- [x] `baseline`
+- [x] `compare`
+- [ ] `report` — partial: `report latest` re-runs the analysis; stored runs need opportunity tracking (Phase 3, §38)
+- [x] `opportunities` with `--strategy`
+- [x] `explain <id>`
+- [x] Global flags: `--format`, `--output`, `--config`, `--path`, `--quiet`, `--verbose`
+- [x] Shell completions
+- [x] Meaningful exit codes
+- [x] `--help` text and man page (`tpt-profiler man`)
+- [x] CLI integration tests (assert_cmd-style, 11 tests)
 
 ### 1.12 Library API (`tpt-profiler` core)
-- [ ] Orchestrator pipeline: discovery → analysis → evidence → opportunities → priority → report (§5)
-- [ ] Analyzer registration (internal plugin-style seam, §67)
-- [ ] Public API docs and examples
-- [ ] Optional `std` feature wiring (§73)
+- [x] Orchestrator pipeline: discovery → analysis → evidence → opportunities → priority → report (§5)
+- [x] Analyzer registration (internal plugin-style seam, §67) — `pipeline::analyse_with` takes a caller-built `StaticEngine`
+- [x] Public API docs and examples — crate-level doctest, `examples/analyse.rs`
+- [x] Optional `std` feature wiring (§73) — `std` forwards to the model crate; the core itself is std-only
 
 ### 1.13 MVP testing & release (§76)
-- [ ] Unit tests: parsers, scoring, models, detectors
-- [ ] Integration tests: workspace discovery, benchmark execution
-- [ ] Golden tests: reports, JSON, Markdown
-- [ ] Regression tests: known opportunities remain detectable
-- [ ] Dogfood: run `tpt-profiler` on itself
-- [ ] Run on 2–3 real unfamiliar Rust repos and review output quality
-- [ ] Profiler self-benchmarks (§72, §76)
-- [ ] Docs: README quickstart, CLI reference, config reference, JSON schema doc
-- [ ] CHANGELOG entry for 0.1.0
-- [ ] Tag and publish v0.1.0
+- [x] Unit tests: parsers, scoring, models, detectors
+- [x] Integration tests: workspace discovery, benchmark execution (`cargo bench` run end-to-end on a throwaway crate)
+- [x] Golden tests: reports, JSON, Markdown
+- [x] Regression tests: known opportunities remain detectable
+- [x] Dogfood: run `tpt-profiler` on itself (ran; found and fixed a text bug in the dependency findings)
+- [x] Run on 2–3 real unfamiliar Rust repos and review output quality — tpt-rustvac, tpt-pulse, tpt-mcpbox (static only; runtime/bench execute project code). Review fixed a loop-invariant false positive (closure parameters and body-local bindings were treated as invariant).
+- [ ] Profiler self-benchmarks (§72, §76) — not started; needs a hardware-stable policy for what is asserted
+- [x] Docs: README quickstart, CLI reference, config reference, JSON schema doc (`docs/`)
+- [x] CHANGELOG entry for 0.1.0 (under Unreleased; rename to 0.1.0 at release)
+- [ ] Tag and publish v0.1.0 — needs your go-ahead (outward-facing)
+- [ ] Follow-up: ALLOCATION findings dominate real-repo output (26 of 37 in tpt-mcpbox), mostly at priority ~11/100; review aggregation (§58) and priority thresholds
+- [ ] Follow-up: `[profiling]` toggles are parsed but do not gate anything; `Overrides` is not wired to CLI flags (§40)
+- [ ] Follow-up: loop-invariant detector still reports some findings in tpt-pulse; only a sample was reviewed, so review the rest for false positives
 
 ---
 
