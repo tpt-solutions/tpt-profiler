@@ -2,9 +2,11 @@
 //! can be hoisted.
 //!
 //! A `let` binding inside a loop whose initialiser calls a function with
-//! arguments that do not mention the loop variable is a hoisting
-//! candidate. Confidence is `Low`: the call may be cheap or intentionally
+//! arguments that do not depend on the loop variable (or anything else
+//! bound per iteration) is a hoisting candidate. Confidence is `Low`: the call may be cheap or intentionally
 //! re-evaluated (e.g. `Instant::now()`).
+
+use std::collections::HashSet;
 
 use syn::visit::Visit;
 use tpt_profiler_model::{Category, Confidence, SourceLocation};
@@ -44,6 +46,7 @@ impl<'ast> Visit<'ast> for HoistingVisitor {
         let variables = loop_variables(&expr.pat);
         let mut finder = InvariantCallFinder {
             variables: &variables,
+            body_bindings: HashSet::new(),
             invariants: Vec::new(),
         };
         finder.visit_block(&expr.body);
@@ -66,39 +69,72 @@ impl<'ast> Visit<'ast> for HoistingVisitor {
 }
 
 /// Collects `let x = call(..)` bindings anywhere in the loop body whose
-/// arguments never mention the loop variable. Descends into nested
+/// arguments depend on nothing that varies per iteration. "Varies" means
+/// the loop's own variables, names bound by earlier statements in the body,
+/// and closure parameters inside the initialiser. Descends into nested
 /// blocks; nested loops are re-checked with their own variables when the
 /// outer visitor reaches them.
 struct InvariantCallFinder<'a, 'ast> {
-    variables: &'a std::collections::HashSet<String>,
+    variables: &'a HashSet<String>,
+    body_bindings: HashSet<String>,
     invariants: Vec<&'ast syn::Expr>,
 }
 
 impl<'ast> Visit<'ast> for InvariantCallFinder<'_, 'ast> {
     fn visit_local(&mut self, local: &'ast syn::Local) {
         if let Some(init) = local.init.as_ref().map(|boxed| boxed.expr.as_ref()) {
-            // Free functions and method calls both count; the loop
-            // variable must not appear anywhere in the expression.
-            let (callee_text, args_text) = match init {
-                syn::Expr::Call(call) => (render(&call.func), render(call)),
-                syn::Expr::MethodCall(method) => (render(&method.receiver), render(method)),
-                _ => {
-                    syn::visit::visit_local(self, local);
-                    return;
+            if let Some((callee_text, args_text)) = call_texts(init) {
+                let mut varying: HashSet<String> = self
+                    .variables
+                    .iter()
+                    .chain(&self.body_bindings)
+                    .cloned()
+                    .collect();
+                varying.extend(closure_parameters(init));
+                let uses_varying = mentions_any(&args_text, &varying);
+                // `Instant::now()` and friends are either intentionally
+                // per-iteration or cheap; skip the obvious ones.
+                if !uses_varying && !callee_text.contains("now") {
+                    self.invariants.push(init);
                 }
-            };
-            let uses_loop_var = self
-                .variables
-                .iter()
-                .any(|variable| args_text.contains(variable));
-            // `Instant::now()` and friends are either intentionally
-            // per-iteration or cheap; skip the obvious ones.
-            if !uses_loop_var && !callee_text.contains("now") {
-                self.invariants.push(init);
             }
         }
+        self.body_bindings.extend(loop_variables(&local.pat));
         syn::visit::visit_local(self, local);
     }
+}
+
+/// Rendered callee and full text of a free-function or method call; `None`
+/// for any other initialiser.
+fn call_texts(init: &syn::Expr) -> Option<(String, String)> {
+    match init {
+        syn::Expr::Call(call) => Some((render(&call.func), render(call))),
+        syn::Expr::MethodCall(method) => Some((render(&method.receiver), render(method))),
+        _ => None,
+    }
+}
+
+/// Whether `text` contains any of `names` as a whole identifier (so `i`
+/// does not match `items`).
+fn mentions_any(text: &str, names: &HashSet<String>) -> bool {
+    text.split(|character: char| !(character.is_alphanumeric() || character == '_'))
+        .any(|token| names.contains(token))
+}
+
+/// Names bound by closure parameters anywhere within `expr`.
+fn closure_parameters(expr: &syn::Expr) -> HashSet<String> {
+    struct Closures(HashSet<String>);
+    impl<'ast> Visit<'ast> for Closures {
+        fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+            for input in &closure.inputs {
+                self.0.extend(loop_variables(input));
+            }
+            syn::visit::visit_expr_closure(self, closure);
+        }
+    }
+    let mut visitor = Closures(HashSet::new());
+    visitor.visit_expr(expr);
+    visitor.0
 }
 
 #[cfg(test)]
@@ -163,5 +199,56 @@ fn tick(rounds: u32) {
 }
 ";
         assert!(findings_of(source).is_empty());
+    }
+
+    #[test]
+    fn call_on_a_body_local_is_not_flagged() {
+        // `resolved` depends on `view`, which is rebuilt every iteration;
+        // only `make_view()` itself is invariant.
+        let source = r"
+fn run(names: &Names, n: usize) -> usize {
+    let mut total = 0;
+    for _ in 0..n {
+        let view = make_view();
+        let resolved = names.resolve(&view);
+        total += resolved;
+    }
+    total
+}
+";
+        let findings = findings_of(source);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].description.contains("make_view"));
+    }
+
+    #[test]
+    fn closure_parameters_count_as_per_iteration_values() {
+        let source = r"
+fn run(items: &[u32], factor: u32, n: usize) -> usize {
+    let mut total = 0;
+    for _ in 0..n {
+        let scaled: Vec<u32> = items.iter().map(|item| scale(item, factor)).collect();
+        total += scaled.len();
+    }
+    total
+}
+";
+        assert!(findings_of(source).is_empty());
+    }
+
+    #[test]
+    fn loop_variable_matches_whole_identifiers_only() {
+        // `items` contains the letter `i`, but it is not the loop variable.
+        let source = r"
+fn run(items: &[u32], n: usize) -> usize {
+    let mut total = 0;
+    for i in 0..n {
+        let built = build(items);
+        total += built.len() + i;
+    }
+    total
+}
+";
+        assert_eq!(findings_of(source).len(), 1);
     }
 }

@@ -195,9 +195,14 @@ fn parallel_candidate(expr: &syn::ExprForLoop) -> Option<String> {
         return None;
     }
     let variables = loop_variables(&expr.pat);
-    let var = variables.iter().next().cloned().unwrap_or_default();
+    // Patterns without a single binding (tuples, wildcards) name no
+    // variable; say "a loop" rather than printing an empty code span.
+    let subject = match variables.iter().next() {
+        Some(var) => format!("a loop over `{var}`"),
+        None => String::from("a loop"),
+    };
     Some(format!(
-        "independent-looking iterations calling functions per item in a loop over `{var}`: \
+        "independent-looking iterations calling functions per item in {subject}: \
          Rayon-style parallelism candidate; only worthwhile if per-item work is substantial \
          (workload-size guard applied for literal small ranges — spec §13)"
     ))

@@ -120,7 +120,7 @@ pub fn analyze(metadata: &Metadata) -> DependencyReport {
         report.findings.push(DependencyFinding::new(
             format!("duplicate versions of {}", duplicate.name),
             format!(
-                "{} resolves to {} versions ({}) — duplicated crates are compiled and \\
+                "{} resolves to {} versions ({}) — duplicated crates are compiled and \
                  audited twice; unify the version requirements or `cargo update` \
                  (spec §18: dependency reduction)",
                 duplicate.name,
@@ -145,8 +145,8 @@ pub fn analyze(metadata: &Metadata) -> DependencyReport {
                 report.findings.push(DependencyFinding::new(
                     format!("build-dependency {} pulls {} crates", package.name, size),
                     format!(
-                        "build-dependency `{}` transitively pulls {size} unique crates — \\
-                         pure compile-time cost paid by every contributor and CI run; \\
+                        "build-dependency `{}` transitively pulls {size} unique crates — \
+                         pure compile-time cost paid by every contributor and CI run; \
                          consider a lighter alternative or an internal implementation \
                          (spec §18: internal implementation)",
                         package.name
@@ -158,10 +158,14 @@ pub fn analyze(metadata: &Metadata) -> DependencyReport {
             // Feature surface heuristic (spec §18: feature usage).
             if node.features.len() >= 8 {
                 report.findings.push(DependencyFinding::new(
-                    format!("{} has {} features enabled", package.name, node.features.len()),
                     format!(
-                        "`{}` is resolved with {} enabled features ({}); review `default-features` \\
-                         and enable only what is used — feature reduction shrinks both \\
+                        "{} has {} features enabled",
+                        package.name,
+                        node.features.len()
+                    ),
+                    format!(
+                        "`{}` is resolved with {} enabled features ({}); review `default-features` \
+                         and enable only what is used — feature reduction shrinks both \
                          compile time and binary size (spec §18: feature reduction)",
                         package.name,
                         node.features.len(),
@@ -350,5 +354,53 @@ mod tests {
         assert!(report.duplicates.is_empty());
         assert!(report.findings.is_empty());
         assert_eq!(report.transitive_only, 0);
+    }
+
+    #[test]
+    fn feature_surface_finding_text_has_no_stray_escapes() {
+        // Nine resolved features trips the feature-surface heuristic; its
+        // multi-line message must read as one clean sentence (no literal
+        // backslashes or indentation from line continuations).
+        let metadata = metadata_from(
+            r#"{
+                "packages": [
+                    {
+                        "name": "clap", "version": "4.5.0", "id": "clap 4.5.0",
+                        "manifest_path": "/home/.cargo/clap/Cargo.toml", "dependencies": [], "targets": [], "features": {}, "edition": "2021"
+                    }
+                ],
+                "workspace_members": [],
+                "resolve": {
+                    "nodes": [
+                        {
+                            "id": "clap 4.5.0", "dependencies": [], "deps": [],
+                            "features": ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
+                        }
+                    ],
+                    "root": null
+                },
+                "workspace_root": "/ws",
+                "target_directory": "/ws/target",
+                "version": 8
+            }"#,
+        );
+        let report = analyze(&metadata);
+        let finding = report
+            .findings
+            .iter()
+            .find(|finding| finding.title.contains("features enabled"))
+            .expect("feature-surface finding");
+        assert!(
+            !finding.description.contains('\\'),
+            "{}",
+            finding.description
+        );
+        assert!(
+            finding
+                .description
+                .contains("review `default-features` and enable only"),
+            "{}",
+            finding.description
+        );
     }
 }
