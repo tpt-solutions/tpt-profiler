@@ -14,6 +14,8 @@ use tpt_profiler_report as report;
 pub struct Context {
     pub format: Format,
     pub output: Option<PathBuf>,
+    /// File to append a Markdown summary to (spec §39), if requested.
+    pub summary: Option<PathBuf>,
     pub config_path: Option<PathBuf>,
     pub path: PathBuf,
     pub quiet: bool,
@@ -27,7 +29,10 @@ pub struct Context {
 pub enum Format {
     Terminal,
     Json,
+    Jsonl,
     Markdown,
+    Html,
+    GithubAnnotations,
 }
 
 /// Command failure (spec §74); rendered by `main` and mapped to a
@@ -135,6 +140,35 @@ pub fn full(context: &Context) -> CommandResult {
     emit_analysis(context, &run)
 }
 
+/// Appends Markdown to the `--summary` file, when one was given (spec §39).
+/// Appending keeps several commands in one CI job summary.
+fn append_summary(context: &Context, markdown: &str) -> CommandResult {
+    use std::io::Write as _;
+
+    let Some(path) = &context.summary else {
+        return Ok(());
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| Error::Message(format!("could not open {}: {error}", path.display())))?;
+    file.write_all(markdown.as_bytes())
+        .map_err(|error| Error::Message(format!("could not write {}: {error}", path.display())))
+}
+
+/// Appends the opportunity report to the `--summary` file.
+fn write_summary(
+    context: &Context,
+    repository: &str,
+    opportunities: &[tpt_profiler_model::Opportunity],
+) -> CommandResult {
+    if context.summary.is_none() {
+        return Ok(());
+    }
+    append_summary(context, &report::render_markdown(repository, opportunities))
+}
+
 fn emit_analysis(context: &Context, run: &pipeline::AnalysisRun) -> CommandResult {
     if !context.quiet {
         for error in &run.static_report.parse_errors {
@@ -149,6 +183,7 @@ fn emit_analysis(context: &Context, run: &pipeline::AnalysisRun) -> CommandResul
             run.dependency_report.findings.len(),
         );
     }
+    write_summary(context, &run.repository.name, &run.opportunities)?;
     match context.format {
         Format::Terminal => {
             let text = report::render_opportunities(
@@ -169,9 +204,22 @@ fn emit_analysis(context: &Context, run: &pipeline::AnalysisRun) -> CommandResul
             )?;
             context.emit(&json)
         }
+        Format::Jsonl => {
+            let jsonl =
+                report::render_opportunities_jsonl(&run.repository.name, &run.opportunities)?;
+            context.emit(&jsonl)
+        }
         Format::Markdown => {
             let markdown = report::render_markdown(&run.repository.name, &run.opportunities);
             context.emit(&markdown)
+        }
+        Format::Html => {
+            let html = report::render_html(&run.repository.name, &run.opportunities);
+            context.emit(&html)
+        }
+        Format::GithubAnnotations => {
+            let annotations = report::render_github_annotations(&run.opportunities);
+            context.emit(&annotations)
         }
     }
 }
@@ -185,48 +233,28 @@ pub fn runtime(context: &Context) -> CommandResult {
         );
     }
     let environment = tpt_profiler::environment::capture_environment(Some(&context.path));
+    let outcomes =
+        tpt_profiler::measure::collect_runtime(&context.path, &config, &environment, now_unix())?;
     let mut lines = Vec::new();
-    for workload in &config.workloads {
-        let mut runnable = tpt_profiler_runtime::RunnableWorkload::new(
-            tpt_profiler_model::Workload {
-                name: workload.name.clone(),
-                input: None,
-                duration_hint_ms: None,
-                repetitions: workload.repetitions,
-            },
-            context.path.join(&workload.command),
-        );
-        runnable.args.clone_from(&workload.args);
-        if let Some(warmup) = workload.warmup_runs {
-            runnable.warmup_runs = warmup;
-        }
-        if let Some(timeout_ms) = workload.timeout_ms {
-            runnable.timeout = std::time::Duration::from_millis(timeout_ms);
-        }
-        let result = tpt_profiler_runtime::measure_workload(&runnable, None)?;
-        for measurement in tpt_profiler_runtime::to_measurements(
-            &result,
-            &tpt_profiler_model::MeasurementSource::WallClock,
-            now_unix(),
-            Some(&environment),
-        ) {
+    for outcome in &outcomes {
+        for measurement in &outcome.measurements {
             lines.push(format!(
                 "{}: {:.4} {} (confidence {}, n={})",
                 measurement.metric,
                 measurement.value,
                 measurement.unit,
                 measurement.confidence,
-                result.summary.n,
+                outcome.samples,
             ));
         }
-        if result.failed_runs > 0 {
+        if outcome.failed_runs > 0 {
             lines.push(format!(
                 "{}: {} run(s) failed or timed out",
-                workload.name, result.failed_runs
+                outcome.name, outcome.failed_runs
             ));
         }
     }
-    if lines.is_empty() {
+    if outcomes.is_empty() {
         context.emit("No workloads configured — add a [[workloads]] section (spec §23).")
     } else {
         context.emit(&lines.join("\n"))
@@ -275,13 +303,40 @@ pub fn bench(context: &Context) -> CommandResult {
     }
 }
 
+/// Builds the run record for `baseline`, `compare` and `ci`: static
+/// findings plus the runtime measurements from configured workloads
+/// (spec §8.2, §36). The workload outcomes are returned too, so callers can
+/// report failed runs.
+fn measured_profile(
+    context: &Context,
+    config: &Config,
+    run: &pipeline::AnalysisRun,
+    name: &str,
+) -> Result<
+    (
+        tpt_profiler_model::ProfileRun,
+        Vec<tpt_profiler::measure::WorkloadOutcome>,
+    ),
+    Error,
+> {
+    let timestamp = now_unix();
+    let environment = tpt_profiler::environment::capture_environment(Some(&context.path));
+    let outcomes =
+        tpt_profiler::measure::collect_runtime(&context.path, config, &environment, timestamp)?;
+    let mut profile = pipeline::to_profile_run(run, name, timestamp, environment);
+    for outcome in &outcomes {
+        profile
+            .measurements
+            .extend(outcome.measurements.iter().cloned());
+    }
+    Ok((profile, outcomes))
+}
+
 /// `baseline <name>` — save current measurements (spec §36).
 pub fn baseline(context: &Context, name: &str) -> CommandResult {
     let config = context.load_config()?;
     let run = pipeline::analyse(&context.path, &config)?;
-    let environment = tpt_profiler::environment::capture_environment(Some(&context.path));
-    let mut profile = pipeline::to_profile_run(&run, name, now_unix(), environment.clone());
-    profile.environment = environment;
+    let (profile, _) = measured_profile(context, &config, &run, name)?;
     let stored = tpt_profiler::baseline::baseline_from_run(name, &profile);
     let path = tpt_profiler::baseline::save_baseline(&run.workspace_root, &stored)?;
     if !context.quiet {
@@ -304,8 +359,7 @@ pub fn compare(context: &Context, name: &str) -> CommandResult {
             "baseline `{name}` not found — run `tpt-profiler baseline {name}` first"
         )));
     };
-    let environment = tpt_profiler::environment::capture_environment(Some(&context.path));
-    let profile = pipeline::to_profile_run(&run, name, now_unix(), environment);
+    let (profile, _) = measured_profile(context, &config, &run, name)?;
     // Comparable measurements come from a runtime/bench run; a purely
     // static run has none, and the comparison then reports no metrics.
     let comparison = tpt_profiler::baseline::compare(&baseline, &profile, &config);
@@ -336,6 +390,88 @@ pub fn compare(context: &Context, name: &str) -> CommandResult {
     context.emit(&lines.join("\n"))
 }
 
+/// `ci <name>` — apply the `[ci]` policy to the comparison against a
+/// baseline (spec §39). Exits non-zero when the policy fails the run.
+pub fn ci(context: &Context, name: &str) -> CommandResult {
+    use std::fmt::Write as _;
+
+    let config = context.load_config()?;
+    if !config.ci.enabled {
+        return context.emit("CI checks are disabled ([ci] enabled = false)");
+    }
+    let run = pipeline::analyse(&context.path, &config)?;
+    let Some(baseline) = tpt_profiler::baseline::load_baseline(&run.workspace_root, name)? else {
+        return Err(Error::Message(format!(
+            "baseline `{name}` not found — run `tpt-profiler baseline {name}` on the reference branch first"
+        )));
+    };
+    let (profile, workloads) = measured_profile(context, &config, &run, name)?;
+    let comparison = tpt_profiler::baseline::compare(&baseline, &profile, &config);
+    let mut outcomes = tpt_profiler::ci::evaluate(&comparison, &config.ci);
+    // A workload that failed or timed out yields no measurements, so the
+    // comparison cannot cover it; say so rather than letting it pass quietly.
+    for workload in workloads.iter().filter(|workload| workload.failed_runs > 0) {
+        outcomes.push(tpt_profiler::ci::Outcome {
+            severity: tpt_profiler::ci::Severity::Warn,
+            message: format!(
+                "workload `{}`: {} run(s) failed or timed out",
+                workload.name, workload.failed_runs
+            ),
+        });
+    }
+
+    let text = if context.format == Format::GithubAnnotations {
+        outcomes
+            .iter()
+            .map(|outcome| {
+                let command = match outcome.severity {
+                    tpt_profiler::ci::Severity::Fail => "error",
+                    tpt_profiler::ci::Severity::Warn => "warning",
+                    tpt_profiler::ci::Severity::Info => "notice",
+                };
+                format!("::{command}::{}", outcome.message)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        let mut lines = vec![format!("CI policy vs `{name}`")];
+        if outcomes.is_empty() {
+            lines.push(String::from("  passed: no regressions"));
+        }
+        for outcome in &outcomes {
+            let label = match outcome.severity {
+                tpt_profiler::ci::Severity::Fail => "FAIL",
+                tpt_profiler::ci::Severity::Warn => "warn",
+                tpt_profiler::ci::Severity::Info => "info",
+            };
+            lines.push(format!("  [{label}] {}", outcome.message));
+        }
+        lines.join("\n")
+    };
+    context.emit(&text)?;
+
+    let mut markdown = format!("## CI policy vs `{name}`\n\n");
+    if outcomes.is_empty() {
+        markdown.push_str("No regressions.\n");
+    }
+    for outcome in &outcomes {
+        let label = match outcome.severity {
+            tpt_profiler::ci::Severity::Fail => "FAIL",
+            tpt_profiler::ci::Severity::Warn => "warn",
+            tpt_profiler::ci::Severity::Info => "info",
+        };
+        let _ = writeln!(markdown, "- **{label}** {}", outcome.message);
+    }
+    append_summary(context, &markdown)?;
+
+    if tpt_profiler::ci::failed(&outcomes) {
+        return Err(Error::Message(format!(
+            "CI policy failed against `{name}` (see FAIL lines above)"
+        )));
+    }
+    Ok(())
+}
+
 /// `report <name>` — print stored results (spec §42). `latest` re-runs
 /// the analysis in-process; stored run persistence lands with
 /// opportunity tracking (Phase 3).
@@ -356,12 +492,13 @@ pub fn opportunities(
 ) -> CommandResult {
     let config = context.load_config()?;
     let run = pipeline::analyse(&context.path, &config)?;
-    if run.no_opportunities && context.format == Format::Terminal {
-        return context.emit("No opportunities detected.");
-    }
     let mut opportunities = run.opportunities.clone();
     tpt_profiler_opportunity::sort_by_strategy(&mut opportunities, strategy);
     opportunities.truncate(top);
+    write_summary(context, &run.repository.name, &opportunities)?;
+    if run.no_opportunities && context.format == Format::Terminal {
+        return context.emit("No opportunities detected.");
+    }
     match context.format {
         Format::Terminal => {
             let text = report::render_opportunities(
@@ -382,9 +519,21 @@ pub fn opportunities(
             )?;
             context.emit(&json)
         }
+        Format::Jsonl => {
+            let jsonl = report::render_opportunities_jsonl(&run.repository.name, &opportunities)?;
+            context.emit(&jsonl)
+        }
         Format::Markdown => {
             let markdown = report::render_markdown(&run.repository.name, &opportunities);
             context.emit(&markdown)
+        }
+        Format::Html => {
+            let html = report::render_html(&run.repository.name, &opportunities);
+            context.emit(&html)
+        }
+        Format::GithubAnnotations => {
+            let annotations = report::render_github_annotations(&opportunities);
+            context.emit(&annotations)
         }
     }
 }

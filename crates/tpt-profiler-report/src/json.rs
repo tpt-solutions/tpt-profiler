@@ -104,6 +104,39 @@ pub fn render_opportunities_json(
     serde_json::to_string_pretty(&envelope)
 }
 
+/// One JSONL line: a summary entry tagged with the schema version and
+/// repository so each line is self-describing (spec §42, §69).
+#[derive(Debug, Serialize)]
+struct JsonlLine<'a> {
+    schema_version: u32,
+    repository: &'a str,
+    #[serde(flatten)]
+    opportunity: OpportunitySummaryEntry<'a>,
+}
+
+/// Encodes ranked opportunities as JSON Lines: one compact object per
+/// opportunity, each newline-terminated (spec §42). Suited to streaming
+/// and `grep`/`jq` pipelines; an empty list yields an empty string.
+///
+/// # Errors
+/// Fails when an entry cannot be serialised.
+pub fn render_opportunities_jsonl(
+    repository: &str,
+    opportunities: &[Opportunity],
+) -> Result<String, serde_json::Error> {
+    let mut output = String::new();
+    for entry in summarise(repository, opportunities).opportunities {
+        let line = JsonlLine {
+            schema_version: SCHEMA_VERSION,
+            repository,
+            opportunity: entry,
+        };
+        output.push_str(&serde_json::to_string(&line)?);
+        output.push('\n');
+    }
+    Ok(output)
+}
+
 /// Encodes the opportunity summary as JSON.
 ///
 /// # Errors
@@ -165,6 +198,28 @@ mod tests {
         let decoded: SchemaEnvelope<ProfileRun> = serde_json::from_str(&json).expect("decode");
         assert_eq!(decoded.validate().expect("valid"), SCHEMA_VERSION);
         assert_eq!(decoded.data, run);
+    }
+
+    #[test]
+    fn jsonl_emits_one_self_describing_line_per_opportunity() {
+        let mut run = run_with_one();
+        run.opportunities.push(run.opportunities[0].clone());
+        let jsonl = render_opportunities_jsonl(&run.id, &run.opportunities).expect("encode");
+        let lines: Vec<&str> = jsonl.lines().collect();
+        assert_eq!(lines.len(), 2);
+        for line in lines {
+            let value: serde_json::Value = serde_json::from_str(line).expect("each line is JSON");
+            assert_eq!(value["schema_version"], SCHEMA_VERSION);
+            assert_eq!(value["repository"], run.id.as_str());
+            assert_eq!(value["category"], "SIMD");
+            assert_eq!(value["impact"], 9);
+        }
+        assert!(jsonl.ends_with('\n'));
+    }
+
+    #[test]
+    fn jsonl_is_empty_when_there_are_no_opportunities() {
+        assert_eq!(render_opportunities_jsonl("repo", &[]).expect("encode"), "");
     }
 
     #[test]

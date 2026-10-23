@@ -66,7 +66,9 @@ impl StaticEngine {
         engine.register(Box::new(detectors::allocation::AllocationDetector));
         engine.register(Box::new(detectors::clone::CloneDetector));
         engine.register(Box::new(detectors::datastructure::DataStructureDetector));
+        engine.register(Box::new(detectors::io::IoDetector));
         engine.register(Box::new(detectors::loops::LoopHoistingDetector));
+        engine.register(Box::new(detectors::serialisation::SerialisationDetector));
         engine.register(Box::new(detectors::vector::SimdDetector));
         engine.register(Box::new(detectors::vector::ParallelismDetector));
         engine

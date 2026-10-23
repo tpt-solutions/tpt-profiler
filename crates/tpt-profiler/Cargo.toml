@@ -22,6 +22,7 @@ std = ["tpt-profiler-model/std"]
 tpt-profiler-model = { workspace = true, features = ["serde"] }
 tpt-profiler-opportunity.workspace = true
 tpt-profiler-static.workspace = true
+tpt-profiler-runtime.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

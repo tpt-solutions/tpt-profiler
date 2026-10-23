@@ -29,6 +29,12 @@ struct Cli {
     #[arg(long, value_name = "FILE", global = true)]
     output: Option<std::path::PathBuf>,
 
+    /// Append a Markdown summary of the results to FILE, for CI job
+    /// summaries (e.g. `$GITHUB_STEP_SUMMARY`). Opt-in and separate from
+    /// `--format`, so stdout output is unchanged (spec §39).
+    #[arg(long, value_name = "FILE", global = true)]
+    summary: Option<std::path::PathBuf>,
+
     /// Path to `tpt-profiler.toml` (default: discovered upward).
     #[arg(long, value_name = "FILE", global = true)]
     config: Option<std::path::PathBuf>,
@@ -66,8 +72,14 @@ enum Format {
     Terminal,
     /// Versioned JSON (spec §69).
     Json,
+    /// JSON Lines: one opportunity per line (spec §42).
+    Jsonl,
     /// Markdown.
     Markdown,
+    /// Self-contained HTML page (spec §42).
+    Html,
+    /// GitHub Actions workflow annotations (spec §39).
+    GithubAnnotations,
 }
 
 #[derive(Debug, Subcommand)]
@@ -91,6 +103,13 @@ enum CliCommand {
     },
     /// Compare the current measurements against a baseline (spec §36).
     Compare {
+        /// Baseline name to compare against (default: `default`).
+        #[arg(default_value = "default")]
+        name: String,
+    },
+    /// Apply the `[ci]` policy to the current measurements against a
+    /// baseline; fails the run on a configured regression (spec §39).
+    Ci {
         /// Baseline name to compare against (default: `default`).
         #[arg(default_value = "default")]
         name: String,
@@ -176,9 +195,13 @@ fn main() -> ExitCode {
         format: match cli.format {
             Format::Terminal => commands::Format::Terminal,
             Format::Json => commands::Format::Json,
+            Format::Jsonl => commands::Format::Jsonl,
             Format::Markdown => commands::Format::Markdown,
+            Format::Html => commands::Format::Html,
+            Format::GithubAnnotations => commands::Format::GithubAnnotations,
         },
         output: cli.output,
+        summary: cli.summary,
         config_path: cli.config,
         path: cli.path,
         quiet: cli.quiet,
@@ -193,6 +216,7 @@ fn main() -> ExitCode {
         CliCommand::Full => commands::full(&context),
         CliCommand::Baseline { name } => commands::baseline(&context, &name),
         CliCommand::Compare { name } => commands::compare(&context, &name),
+        CliCommand::Ci { name } => commands::ci(&context, &name),
         CliCommand::Report { name } => commands::report(&context, &name),
         CliCommand::Opportunities { strategy, top } => {
             commands::opportunities(&context, strategy.into(), top)

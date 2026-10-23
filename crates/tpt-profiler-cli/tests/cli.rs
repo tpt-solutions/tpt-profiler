@@ -278,3 +278,28 @@ fn disabled_benchmarks_are_not_run() {
     let stdout = String::from_utf8(output.stdout).expect("utf8");
     assert!(stdout.contains("benchmarks are disabled"), "{stdout}");
 }
+
+#[test]
+fn summary_flag_appends_markdown_and_leaves_stdout_alone() {
+    let directory = std::env::temp_dir().join(format!("tpt-summary-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).expect("create temp dir");
+    let summary = directory.join("summary.md");
+    let _ = std::fs::remove_file(&summary);
+
+    for _ in 0..2 {
+        binary()
+            .args(["--path", fixture(), "--quiet", "--summary"])
+            .arg(&summary)
+            .args(["--format", "jsonl", "static"])
+            .assert()
+            .success();
+    }
+
+    let written = std::fs::read_to_string(&summary).expect("summary written");
+    assert_eq!(
+        written.matches("# tpt-profiler report").count(),
+        2,
+        "append mode keeps both runs: {written}"
+    );
+    std::fs::remove_dir_all(&directory).ok();
+}

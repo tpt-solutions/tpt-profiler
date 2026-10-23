@@ -79,9 +79,9 @@ turned off for one run with `--disable <mode>`.
 
 | Key | Type | Default | Status in v0.1 |
 |-----|------|---------|----------------|
-| `enabled` | bool | `true` | Reserved: there is no `ci` command until Phase 3. |
-| `fail_on_regression` | bool | `true` | Parsed. Applies to CI mode (Phase 3). |
-| `runtime_threshold` | float | `0.10` | Used by `compare` to decide what counts as a regression (fraction: `0.10` = 10%). |
+| `enabled` | bool | `true` | When `false`, the `ci` command reports that CI checks are disabled and exits `0`. |
+| `fail_on_regression` | bool | `true` | Used by `ci`: a regression fails the run when `true`, and only warns when `false`. |
+| `runtime_threshold` | float | `0.10` | Used by `compare` and `ci` to decide what counts as a regression (fraction: `0.10` = 10%). |
 | `binary_threshold` | float | `0.05` | Reserved for binary-size analysis (Phase 2). |
 
 ## `[scoring]`

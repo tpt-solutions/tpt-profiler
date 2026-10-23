@@ -7,8 +7,10 @@
 
 pub mod measure;
 pub mod process;
+pub mod provider;
 pub mod stats;
 
 pub use measure::{RunnableWorkload, WorkloadResult, measure_workload, to_measurements};
 pub use process::{CancelToken, RunOutcome, run};
+pub use provider::{Backend, EvidenceProvider, Platform, ToolInfo, detect, select_backend};
 pub use stats::Summary;

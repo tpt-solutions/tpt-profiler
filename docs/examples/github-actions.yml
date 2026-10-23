@@ -1,0 +1,55 @@
+# Example: run the tpt-profiler CI policy on pull requests (spec §39).
+#
+# How it works:
+#   * A baseline is saved on the default branch (`baseline` command) and cached
+#     under .tpt-profiler/baselines/.
+#   * Pull requests restore that cache, run `ci` against the baseline, and fail
+#     the job when the [ci] policy fails (fail_on_regression = true).
+#   * Findings appear as workflow annotations, and a Markdown summary is added
+#     to the job summary page.
+#
+# The crate is not on crates.io yet, so this builds the CLI from the checkout.
+# Once published, replace the build step with `cargo install tpt-profiler-cli`.
+#
+# Note: runtime and bench measurements execute project code. Only run them on
+# trusted branches (see todo.md, "Runtime/bench on clones is opt-in only").
+
+name: performance-policy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  save-baseline:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p tpt-profiler-cli
+      - run: ./target/release/tpt-profiler --quiet baseline default
+      - uses: actions/cache/save@v4
+        with:
+          path: .tpt-profiler/baselines
+          key: tpt-baseline-${{ github.sha }}
+
+  ci:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache/restore@v4
+        with:
+          path: .tpt-profiler/baselines
+          key: tpt-baseline-
+          restore-keys: tpt-baseline-
+      - run: cargo build --release -p tpt-profiler-cli
+      - name: Run CI policy
+        # `ci` runs the configured [[workloads]] itself, then judges them
+        # against the cached baseline. Exits 1 on a configured regression.
+        run: |
+          ./target/release/tpt-profiler --format github-annotations \
+            --summary "$GITHUB_STEP_SUMMARY" ci default

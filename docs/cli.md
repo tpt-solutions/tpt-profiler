@@ -12,8 +12,9 @@ tpt-profiler [GLOBAL FLAGS] <COMMAND> [ARGS]
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--path <PATH>` | `.` | Project to analyse. Discovery walks upward from here to the Cargo workspace root. |
-| `--format <terminal\|json\|markdown>` | `terminal` | Output format for report-producing commands (spec §42). |
+| `--format <FORMAT>` | `terminal` | Output format for report-producing commands: `terminal`, `json`, `jsonl`, `markdown`, `html`, `github-annotations` (spec §42). |
 | `--output <FILE>` | stdout | Write the report to a file instead of stdout. |
+| `--summary <FILE>` | none | Append a Markdown summary of the results to a file, separate from `--format`. In GitHub Actions, point it at `$GITHUB_STEP_SUMMARY` (spec §39). |
 | `--config <FILE>` | discovered | Use this `tpt-profiler.toml` instead of discovering one (see [config.md](config.md)). |
 | `--quiet` | off | Suppress informational output and warnings on stderr. Also disables colour. |
 | `--verbose` | off | Print diagnostics (file counts, parse errors, dependency findings) on stderr. |
@@ -75,6 +76,35 @@ confidence is never called a regression (spec §36, §50).
 
 Exits `1` with guidance if the baseline does not exist.
 
+### `ci [NAME]`
+
+Runs the configured `[[workloads]]` (spec §23), then applies the `[ci]` policy
+to the comparison against a named baseline (default `default`) (spec §39):
+
+* a regressed metric **fails** the run when `fail_on_regression = true`, and
+  warns otherwise;
+* a metric whose measurements are low confidence (for example, few samples or
+  high spread) is noted as noisy and never judged, so a noisy machine cannot
+  fail a build;
+* a workload that fails or times out is a warning, since the comparison cannot
+  cover it;
+* an environment mismatch between baseline and current is a warning.
+
+`baseline` and `compare` run the same workloads, so the baseline and the
+comparison always use the same metric names.
+
+**Note:** workloads execute project code. Run `ci` only on trusted branches.
+
+Exits `1` when any outcome fails the run. A missing baseline is an error, not
+a pass, so a misconfigured pipeline cannot go green silently. With
+`enabled = false` in `[ci]` the command reports that and exits `0`.
+
+With `--format github-annotations`, each outcome is printed as a `::error::`,
+`::warning::`, or `::notice::` workflow command.
+
+Not yet implemented: the policy's "warn on a new HIGH-priority opportunity"
+rule, which needs persisted opportunity tracking (Phase 3).
+
 ### `report [NAME]`
 
 Prints stored results. Only `latest` is available in v0.1; it re-runs the
@@ -118,6 +148,11 @@ tpt-profiler man > tpt-profiler.1
   `Basis: statistical (measured)` (spec §29).
 * **`markdown`** — a ranked table followed by one section per opportunity.
 * **`json`** — the schema envelope; see [json-schema.md](json-schema.md).
+* **`jsonl`** — one self-describing JSON object per opportunity per line,
+  for streaming and `jq` pipelines.
+* **`html`** — one self-contained page with no scripts or external resources.
+* **`github-annotations`** — one `::notice` workflow command per opportunity,
+  attached to its source file and line where it has one.
 
 ## Exit codes
 

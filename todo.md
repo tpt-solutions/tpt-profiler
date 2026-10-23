@@ -196,7 +196,7 @@
 
 ### 1.10 Baseline & compare (§36)
 - [x] `.tpt-profiler/` directory layout and versioning — `.tpt-profiler/baselines/<name>.json` under `SchemaEnvelope`
-- [x] `baseline` saves runtime measurements (memory/binary/bench as they become available in later phases) — `save_baseline` + `baseline_from_run`
+- [x] `baseline` saves runtime measurements (memory/binary/bench as they become available in later phases) — `save_baseline` + `baseline_from_run`. Corrected in Phase 3.1: workload measurements previously never reached the baseline (`measure::collect_runtime` now feeds `baseline`, `compare` and `ci`). Bench measurements are still not included
 - [x] `compare` reports % change for each metric — signed fractional change, `change_percent()` rendering
 - [x] Noise-aware comparison using the statistical engine — measurement confidence gates the verdict: Low-confidence pairs are `Noisy`, never regressions; thresholds from `[ci]`
 - [x] Handle environment mismatch between baseline and current (warn) — OS mismatch sets `environment_warning`
@@ -248,9 +248,9 @@
 ## Phase 2 — Deeper Profiling (§63)
 
 ### 2.1 Profiler backend abstraction
-- [ ] Evidence-provider trait for external tools (§68)
-- [ ] Tool availability detection → ToolUnavailable
-- [ ] Per-OS backend selection
+- [x] Evidence-provider trait for external tools (§68) — `runtime::provider::EvidenceProvider`
+- [x] Tool availability detection → ToolUnavailable — `provider::detect` (not on PATH, non-zero exit, timeout)
+- [x] Per-OS backend selection — `provider::select_backend` tries providers in preference order, skipping other platforms; concrete backends land in 2.2
 
 ### 2.2 OS profiler integrations
 - [ ] Linux: `perf` (record/stat, parse output)
@@ -293,8 +293,8 @@
 - [ ] `build` command
 
 ### 2.7 Richer static detection
-- [ ] I/O analysis (§16): repeated reads, small writes, sync I/O, repeated parsing
-- [ ] Serialisation analysis (§17): JSON/XML/YAML/binary, repeated ser/de
+- [~] I/O analysis (§16): repeated reads, small writes, sync I/O, repeated parsing — `io` detector covers loop-invariant `fs::read*`/`File::open`, per-iteration `flush`/`sync_*` (Medium) and `write_all` (Low, unbuffered). Repeated parsing not done
+- [~] Serialisation analysis (§17): JSON/XML/YAML/binary, repeated ser/de — `serialisation` detector covers serde_json, toml, serde_yaml, bincode, rmp_serde and ciborium calls on loop-invariant input. XML not done
 - [ ] Richer SIMD detection (§12), including image/audio/DSP/crypto kernels
 - [ ] Algorithmic complexity heuristics
 - [ ] Combine static + runtime evidence to raise confidence
@@ -336,12 +336,12 @@
 ## Phase 3 — Workflow, CI & Tracking (§64)
 
 ### 3.1 CI mode (§39)
-- [ ] `ci` command
-- [ ] `[ci]` config: `fail_on_regression`, `runtime_threshold`, `binary_threshold`, etc.
-- [ ] Policies: fail on runtime regression, warn on binary size, warn on new HIGH opportunity, fail on critical benchmark regression
-- [ ] CI-friendly output (GitHub Actions annotations, summary)
-- [ ] Exit codes per policy outcome
-- [ ] Example workflow files for GitHub Actions
+- [x] `ci` command — runs workloads, judges against a named baseline, exits `1` on a configured regression
+- [x] `[ci]` config: `fail_on_regression`, `runtime_threshold`, `binary_threshold` (binary threshold parsed; binary analysis is Phase 2.5)
+- [~] Policies: fail on runtime regression ✓; warn on binary size (needs 2.5); warn on new HIGH opportunity (needs opportunity tracking, 3.4); fail on critical benchmark regression (bench measurements not in baselines yet)
+- [x] CI-friendly output (GitHub Actions annotations, summary) — `--format github-annotations` (`::notice` per opportunity) and `--summary <FILE>` (appends Markdown, e.g. to `$GITHUB_STEP_SUMMARY`)
+- [x] Exit codes per policy outcome — fail → `1`; warn and info never change the exit code
+- [x] Example workflow files for GitHub Actions — `docs/examples/github-actions.yml`
 
 ### 3.2 Regression detection (§37)
 - [ ] Per-function / per-benchmark regression detection
@@ -350,9 +350,9 @@
 - [ ] Regression report format
 
 ### 3.3 Output formats
-- [ ] JSONL output (§42)
-- [ ] HTML report (§42)
-- [ ] Stable, versioned schema with compatibility tests (§69)
+- [x] JSONL output (§42) — `--format jsonl`, one self-describing object per line
+- [x] HTML report (§42) — `--format html`, single page, inline CSS, no external resources
+- [x] Stable, versioned schema with compatibility tests (§69) — v1 JSON and JSONL shapes frozen in `report/tests/fixtures/`; a shape change fails the golden test
 
 ### 3.4 Persistent opportunity tracking (§38, §52)
 - [ ] Persist opportunities with stable IDs across runs
