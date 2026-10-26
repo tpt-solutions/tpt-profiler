@@ -1,13 +1,14 @@
 //! The static analysis engine (spec §9–13): analyzer registry, source
 //! walking, parsing, and deterministic result assembly (spec §67, §75).
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 use tpt_profiler_model::error::{Error, ParseError};
 
+use crate::cache;
 use crate::context::FileContext;
 use crate::detectors;
 use crate::finding::{Finding, sort_findings};
@@ -32,6 +33,8 @@ pub struct StaticReport {
     pub parse_errors: Vec<ParseError>,
     /// Number of source files analysed.
     pub files_analyzed: usize,
+    /// Files whose findings came from the incremental cache (spec §72).
+    pub cache_hits: usize,
 }
 
 impl StaticReport {
@@ -63,12 +66,20 @@ impl StaticEngine {
     #[must_use]
     pub fn with_default_analyzers() -> Self {
         let mut engine = Self::default();
+        engine.register(Box::new(detectors::algorithm::AlgorithmDetector));
         engine.register(Box::new(detectors::allocation::AllocationDetector));
         engine.register(Box::new(detectors::clone::CloneDetector));
         engine.register(Box::new(detectors::datastructure::DataStructureDetector));
         engine.register(Box::new(detectors::io::IoDetector));
         engine.register(Box::new(detectors::loops::LoopHoistingDetector));
         engine.register(Box::new(detectors::serialisation::SerialisationDetector));
+        engine.register(Box::new(detectors::architecture::ConversionLayerDetector));
+        engine.register(Box::new(detectors::architecture::DuplicateBodyDetector));
+        engine.register(Box::new(detectors::concurrency::LockInLoopDetector));
+        engine.register(Box::new(detectors::wasm::NativeOnlyDetector));
+        engine.register(Box::new(detectors::wasm::JsBoundaryDetector));
+        engine.register(Box::new(detectors::wasm::SimdIntrinsicDetector));
+        engine.register(Box::new(detectors::gpu::GpuCandidateDetector));
         engine.register(Box::new(detectors::vector::SimdDetector));
         engine.register(Box::new(detectors::vector::ParallelismDetector));
         engine
@@ -138,6 +149,98 @@ impl StaticEngine {
         sort_findings(&mut report.findings);
         Ok(report)
     }
+    /// Like [`analyze_path`](Self::analyze_path), but reuses the findings of
+    /// files whose contents are unchanged since the cache at `cache_path`
+    /// was written (spec §72). The result is the same either way; only the
+    /// work differs. The cache is rewritten after every run, and a failure
+    /// to write it does not fail the analysis.
+    ///
+    /// # Errors
+    /// Fails when a source file cannot be read.
+    pub fn analyze_path_cached(
+        &self,
+        root: &Path,
+        cache_path: &Path,
+    ) -> Result<StaticReport, Error> {
+        let engine_key = self.cache_key();
+        let previous = cache::load(cache_path, &engine_key);
+        let mut next = cache::StaticCache {
+            format: cache::FORMAT,
+            engine: engine_key,
+            files: BTreeMap::new(),
+        };
+        let mut files: Vec<PathBuf> = walk_source_files(root).collect();
+        files.sort();
+        let mut report = StaticReport {
+            files_analyzed: files.len(),
+            ..StaticReport::default()
+        };
+        for path in &files {
+            let source = read_source(path)?;
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .into_owned();
+            let hash = cache::hash_source(&source);
+            if let Some(cached) = previous
+                .files
+                .get(&relative)
+                .filter(|cached| cached.hash == hash)
+            {
+                report.cache_hits += 1;
+                report.findings.extend(
+                    cached
+                        .findings
+                        .iter()
+                        .cloned()
+                        .map(cache::CachedFinding::into_finding),
+                );
+                next.files.insert(relative, cached.clone());
+                continue;
+            }
+            let (findings, parse_errors) = self.analyze_str(&relative, &source);
+            if parse_errors.is_empty() {
+                next.files.insert(
+                    relative,
+                    cache::CachedFile {
+                        hash,
+                        findings: findings
+                            .iter()
+                            .map(cache::CachedFinding::from_finding)
+                            .collect(),
+                    },
+                );
+            }
+            report.parse_errors.extend(parse_errors);
+            report.findings.extend(findings);
+        }
+        sort_findings(&mut report.findings);
+        // A cache that cannot be written only costs time next run.
+        let _ = cache::save(cache_path, &next);
+        Ok(report)
+    }
+
+    /// Identifies the analyzer set and model version a cache was built with.
+    fn cache_key(&self) -> String {
+        let names: Vec<&str> = self
+            .analyzers
+            .iter()
+            .map(|analyzer| analyzer.name())
+            .collect();
+        format!("{} | {}", tpt_profiler_model::version(), names.join(","))
+    }
+}
+
+/// Reads one source file, mapping failure onto the parse-error taxonomy.
+fn read_source(path: &Path) -> Result<String, Error> {
+    std::fs::read_to_string(path).map_err(|error| {
+        Error::Parse(ParseError::InvalidSyntax {
+            path: path.display().to_string(),
+            line: 0,
+            message: error.to_string(),
+        })
+    })
 }
 
 /// Gitignore-aware Rust source walk (spec §7, §72).

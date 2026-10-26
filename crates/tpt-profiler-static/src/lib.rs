@@ -20,10 +20,12 @@
 //! name-based heuristics. Confidence never exceeds `Medium`, and
 //! `// tpt-profiler:ignore` comments suppress false positives.
 
+pub mod cache;
 pub mod context;
 pub mod detectors;
 pub mod engine;
 pub mod finding;
+pub mod functions;
 
 pub use context::{FileContext, IGNORE_MARKER, IGNORE_NEXT_MARKER};
 pub use engine::{Analyzer, StaticEngine, StaticReport};

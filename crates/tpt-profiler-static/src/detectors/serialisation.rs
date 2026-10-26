@@ -3,7 +3,7 @@
 //! hoisted or done once.
 //!
 //! Encoding or decoding each item is expected work and is not flagged.
-//! Only well-known serde format crates are matched, so ordinary functions
+//! Only well-known serde format crates (JSON, TOML, YAML, binary and XML) are matched, so ordinary functions
 //! that happen to be called `from_str` stay quiet.
 
 use syn::visit::Visit;
@@ -58,6 +58,10 @@ const FORMAT_CALLS: &[&str] = &[
     "rmp_serde::from_slice",
     "ciborium::into_writer",
     "ciborium::from_reader",
+    "quick_xml::de::from_str",
+    "quick_xml::se::to_string",
+    "serde_xml_rs::from_str",
+    "serde_xml_rs::to_string",
 ];
 
 #[derive(Debug)]
@@ -141,6 +145,22 @@ fn consume(_r: Record) {}
         let findings = serialisation_findings(source);
         assert_eq!(findings.len(), 1, "{findings:?}");
         assert_eq!(findings[0].location.line_start, 5);
+    }
+
+    #[test]
+    fn invariant_xml_decode_in_loop_is_flagged() {
+        let source = r#"
+fn poll(rounds: u32) {
+    let fixed = String::from("<a/>");
+    for _ in 0..rounds {
+        let value: Record = quick_xml::de::from_str(&fixed).unwrap();
+        consume(value);
+    }
+}
+struct Record;
+fn consume(_r: Record) {}
+"#;
+        assert_eq!(serialisation_findings(source).len(), 1);
     }
 
     #[test]
