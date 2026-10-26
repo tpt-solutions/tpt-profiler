@@ -303,3 +303,206 @@ fn summary_flag_appends_markdown_and_leaves_stdout_alone() {
     );
     std::fs::remove_dir_all(&directory).ok();
 }
+
+#[test]
+fn dismissed_opportunity_is_hidden_from_later_reports() {
+    let root = std::env::temp_dir().join(format!("tpt-dismiss-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).expect("create project");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"dismiss-probe\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .expect("write manifest");
+    std::fs::write(
+        root.join("src").join("lib.rs"),
+        "pub fn names(values: &[String]) -> Vec<String> {\n    let mut out = Vec::new();\n    for value in values {\n        out.push(value.clone());\n    }\n    out\n}\n",
+    )
+    .expect("write source");
+
+    let listing = |root: &std::path::Path| {
+        let output = binary()
+            .arg("--path")
+            .arg(root)
+            .args(["--quiet", "--format", "jsonl", "opportunities"])
+            .output()
+            .expect("run");
+        assert!(output.status.success());
+        String::from_utf8(output.stdout).expect("utf8")
+    };
+
+    let before = listing(&root);
+    let id = before
+        .split("\"id\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("an opportunity to dismiss")
+        .to_owned();
+
+    binary()
+        .arg("--path")
+        .arg(&root)
+        .args(["dismiss", &id, "--reason", "test"])
+        .assert()
+        .success();
+
+    let after = listing(&root);
+    let report = binary()
+        .arg("--path")
+        .arg(&root)
+        .args(["--quiet", "--format", "jsonl", "report"])
+        .output()
+        .expect("run");
+    let report = String::from_utf8(report.stdout).expect("utf8");
+    std::fs::remove_dir_all(&root).ok();
+    assert!(
+        !after.contains(&id),
+        "dismissed {id} still listed:\n{after}"
+    );
+    assert!(
+        !report.contains(&id),
+        "dismissed {id} still in report:\n{report}"
+    );
+}
+
+#[test]
+fn saved_run_is_reported_without_reanalysing_and_unknown_names_fail() {
+    let project = CorpusProject::new("stored-run", "hot_loop.rs");
+
+    binary()
+        .args([
+            "--path",
+            project.path(),
+            "--quiet",
+            "full",
+            "--save",
+            "nightly",
+        ])
+        .assert()
+        .success();
+    let stored = std::path::Path::new(project.path()).join(".tpt-profiler/runs/nightly.json");
+    assert!(
+        stored.exists(),
+        "run was not stored at {}",
+        stored.display()
+    );
+
+    let fresh = binary()
+        .args([
+            "--path",
+            project.path(),
+            "--quiet",
+            "--format",
+            "jsonl",
+            "opportunities",
+        ])
+        .output()
+        .expect("run");
+    let stored_report = binary()
+        .args([
+            "--path",
+            project.path(),
+            "--quiet",
+            "--format",
+            "jsonl",
+            "report",
+            "nightly",
+        ])
+        .output()
+        .expect("run");
+    assert!(stored_report.status.success());
+    let fresh_ids: Vec<String> = String::from_utf8_lossy(&fresh.stdout)
+        .lines()
+        .filter_map(|line| {
+            line.split("\"id\":\"")
+                .nth(1)
+                .and_then(|rest| rest.split('"').next())
+        })
+        .map(str::to_owned)
+        .collect();
+    let stored_ids: Vec<String> = String::from_utf8_lossy(&stored_report.stdout)
+        .lines()
+        .filter_map(|line| {
+            line.split("\"id\":\"")
+                .nth(1)
+                .and_then(|rest| rest.split('"').next())
+        })
+        .map(str::to_owned)
+        .collect();
+    assert!(
+        !stored_ids.is_empty(),
+        "hot loop should yield opportunities"
+    );
+    assert_eq!(stored_ids, fresh_ids);
+
+    let missing = binary()
+        .args(["--path", project.path(), "--quiet", "report", "nosuch"])
+        .output()
+        .expect("run");
+    assert!(!missing.status.success());
+    let stderr = String::from_utf8(missing.stderr).expect("utf8");
+    assert!(stderr.contains("full --save nosuch"), "{stderr}");
+}
+
+#[test]
+fn cpu_without_workloads_says_what_to_configure() {
+    let project = CorpusProject::new("cpu-empty", "clean.rs");
+    let output = binary()
+        .args(["--path", project.path(), "--quiet", "cpu"])
+        .output()
+        .expect("run");
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).expect("utf8");
+    assert!(stdout.contains("no workloads configured"), "{stdout}");
+}
+
+#[test]
+fn ecosystem_reports_findings_shared_across_repositories() {
+    let root = std::env::temp_dir().join(format!("tpt-cli-eco-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tpt-profiler-static/tests/corpus/hot_loop.rs");
+    for name in ["alpha", "beta"] {
+        let repo = root.join(name);
+        std::fs::create_dir_all(repo.join("src")).expect("repo");
+        std::fs::write(
+            repo.join("Cargo.toml"),
+            "[package]\nname = \"eco\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        )
+        .expect("manifest");
+        std::fs::copy(&corpus, repo.join("src").join("lib.rs")).expect("corpus");
+    }
+
+    let text = binary()
+        .args([
+            "--path",
+            root.to_str().expect("utf8"),
+            "--quiet",
+            "ecosystem",
+            "--top",
+            "5",
+        ])
+        .output()
+        .expect("run");
+    assert!(text.status.success());
+    let stdout = String::from_utf8(text.stdout).expect("utf8");
+    assert!(stdout.contains("2 repositories (0 failed)"), "{stdout}");
+    assert!(stdout.contains("Shared opportunities"), "{stdout}");
+    assert!(stdout.contains("2 repos"), "{stdout}");
+
+    let json = binary()
+        .args([
+            "--path",
+            root.to_str().expect("utf8"),
+            "--quiet",
+            "--format",
+            "json",
+            "ecosystem",
+        ])
+        .output()
+        .expect("run");
+    let json = String::from_utf8(json.stdout).expect("utf8");
+    std::fs::remove_dir_all(&root).ok();
+    assert!(json.contains("\"schema_version\""), "{json}");
+    assert!(json.contains("\"shared\""), "{json}");
+}

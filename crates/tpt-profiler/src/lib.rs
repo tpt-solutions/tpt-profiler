@@ -50,3 +50,6 @@ pub const fn version() -> &'static str {
 }
 
 pub use tpt_profiler_model as model;
+
+/// Function sites for mapping hotspots back to source (spec §8.5).
+pub use tpt_profiler_static::functions;
