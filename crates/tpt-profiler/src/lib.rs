@@ -31,6 +31,7 @@ pub mod ci;
 pub mod config;
 pub mod deps;
 pub mod discovery;
+pub mod ecosystem;
 pub mod environment;
 pub mod measure;
 pub mod pipeline;
