@@ -49,8 +49,10 @@ tpt-profiler baseline before-change      # save measurements
 tpt-profiler compare before-change       # % change, noise-aware
 ```
 
-Documentation: [CLI reference](docs/cli.md) · [configuration](docs/config.md) ·
-[JSON schema](docs/json-schema.md). Shell completions and a man page come
+Documentation: [user guide](docs/user-guide.md) · [CLI reference](docs/cli.md) ·
+[configuration](docs/config.md) · [JSON schema](docs/json-schema.md) ·
+[scoring](docs/scoring.md) · [evidence and confidence](docs/evidence-and-confidence.md) ·
+[adding an analyzer](docs/contributing-analyzers.md). Shell completions and a man page come
 from `tpt-profiler completions <shell>` and `tpt-profiler man`.
 
 ## Repository layout

@@ -65,6 +65,7 @@ timeout_ms = 60000            # default 60000
 | `cpu` | bool | `true` | Parsed. CPU profiling is Phase 2. |
 | `simd` | bool | `true` | When `false`, SIMD findings are dropped from `static`, `full`, and `opportunities`. |
 | `parallelism` | bool | `true` | When `false`, parallelism findings are dropped from the analysis. |
+| `binary` | bool | `false` | When `true`, `baseline`, `compare` and `ci` build the workspace's release binaries and record each size (`binary:<target>_bytes`). Opt-in because a release build is expensive (spec §19). |
 
 `memory` and `cpu` are reserved until their analyses exist (Phase 2). Every toggle can be
 turned off for one run with `--disable <mode>`.
@@ -82,7 +83,8 @@ turned off for one run with `--disable <mode>`.
 | `enabled` | bool | `true` | When `false`, the `ci` command reports that CI checks are disabled and exits `0`. |
 | `fail_on_regression` | bool | `true` | Used by `ci`: a regression fails the run when `true`, and only warns when `false`. |
 | `runtime_threshold` | float | `0.10` | Used by `compare` and `ci` to decide what counts as a regression (fraction: `0.10` = 10%). |
-| `binary_threshold` | float | `0.05` | Reserved for binary-size analysis (Phase 2). |
+| `binary_threshold` | float | `0.05` | Used by `compare` and `ci`: binary growth above this fraction is a warning, never a failure (spec §39). Needs `[profiling] binary = true`. |
+| `high_priority` | integer | `70` | Priority (0–100) at or above which an opportunity that is new since the `baseline` record is reported as HIGH by `ci` (a warning, never a failure). The spec gives no cut-off, so 70 is a default. |
 
 ## `[scoring]`
 

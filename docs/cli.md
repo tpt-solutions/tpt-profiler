@@ -35,9 +35,15 @@ under the schema envelope.
 ### `static`
 
 Runs the static analysers (allocation, clone, data-structure, loop, SIMD,
-parallelism, unsafe-region tagging, numerical-context recognition) and the
-dependency-graph analysis, then ranks the result as opportunities
-(spec §8.1, §9–13, §18).
+parallelism, algorithmic complexity, I/O, serialisation, unsafe-region tagging,
+numerical-context recognition) and the dependency-graph analysis, then ranks
+the result as opportunities (spec §2, §8.1, §9–18).
+
+Unchanged files are not analysed again. Findings are cached per file, keyed
+by a hash of the file's contents, in `.tpt-profiler/cache/static-cache.json`
+(spec §72). The cache is only a speed-up: deleting it changes timing, never
+results. `--verbose` reports how many files came from the cache. Ecosystem
+scans never write a cache into the repositories they read.
 
 ### `full`
 
@@ -45,6 +51,10 @@ Runs every analysis that the MVP supports. In v0.1 this is the same
 static-side pipeline as `static`; it also prints the project tree to stderr
 unless `--quiet` is given. Runtime and benchmark execution are separate
 commands (`runtime`, `bench`) because they run project code.
+
+`full --save NAME` also stores the run under `.tpt-profiler/runs/NAME.json`,
+so `report NAME` can print it later without re-analysing the source. Names may
+use letters, digits, `-` and `_` only.
 
 ### `runtime`
 
@@ -79,6 +89,12 @@ reported with its percentage change and one of `improved`, `REGRESSED`,
 `unchanged`, or `noisy — not judged`. A pair where either side has low
 confidence is never called a regression (spec §36, §50).
 
+A regression carries a severity and a confidence. Severity is how far the
+change overshoots the threshold: `minor` below 2× the threshold, `major` from
+2×, and `critical` from 5× (for example, a `runtime_threshold` of `0.10` makes
+a 25% slowdown major). Confidence is the weaker of the baseline and current
+measurements (spec §37).
+
 Exits `1` with guidance if the baseline does not exist.
 
 ### `ci [NAME]`
@@ -94,6 +110,12 @@ against a named baseline (default `default`) (spec §39):
   fail a build;
 * a workload that fails or times out is a warning, since the comparison cannot
   cover it;
+* when `[profiling] binary = true`, binary growth above `binary_threshold` is
+  a warning and never fails the run (spec §39);
+* an opportunity that is new since the `baseline` record and has priority at
+  or above `[ci] high_priority` (default 70) is a warning. Dismissed and
+  snoozed opportunities stay quiet, and so do opportunities already in the
+  record. If no record exists, `ci` notes that instead (spec §39);
 * an environment mismatch between baseline and current is a warning.
 
 `baseline` and `compare` run the same workloads, so the baseline and the
@@ -113,16 +135,136 @@ rule, which needs persisted opportunity tracking (Phase 3).
 
 ### `report [NAME]`
 
-Prints stored results. Only `latest` is available in v0.1; it re-runs the
-static analysis in-process. Persisted runs arrive with opportunity tracking
-(spec §38, Phase 3).
+Prints the full report. `latest` re-runs the static analysis in-process and
+applies the recorded decisions from `.tpt-profiler/opportunities.json`, so
+opportunities that were dismissed or are still snoozed are hidden and each one
+shows its lifecycle state (spec §38). Any other name prints a run saved by
+`full --save NAME`, with the same decisions applied, and does not re-analyse
+the source.
 
 ### `opportunities [--strategy highest-value] [--top N]`
 
 Ranks opportunities and shows the top `N` (default 10) (spec §41, §59).
-`highest-value` orders by expected value: priority × confidence × generality
-over effort × risk. The priority formula itself is not a public contract
+`highest-value` orders by priority, highest first, with ties broken by ID. The
+priority is computed from impact, confidence, generality, effort and risk; see
+[the scoring model](scoring.md). The formula itself is not a public contract
 (spec §27).
+
+### `dismiss <ID> [--reason TEXT]`
+
+Records that a finding is a false positive or not worth doing. The reason is
+kept in `.tpt-profiler/opportunities.json`. A dismissed opportunity is hidden
+from `opportunities` and never reported as new by `ci` (spec §38).
+
+### `mark-not-applicable <ID> --reason TEXT`
+
+Records that the finding's category does not apply to this code, for example
+SIMD advice in code with no numeric kernels. It is recorded as a rejection
+whose reason starts with `not applicable:`, and it is hidden like a dismissal
+(spec §52).
+
+### `ignore <ID>`
+
+Hides a finding without judging whether it is real. Unlike `dismiss`, it
+records no rejection reason and leaves the lifecycle state as it was. Use
+`reopen` to show it again (spec §52).
+
+### `accept <ID>`
+
+Records that a finding is real and will be worked on (spec §38).
+
+### `snooze <ID> [--days N]`
+
+Hides a finding from `opportunities` for N days (default 30). It reappears
+automatically when the snooze expires (spec §38).
+
+### Progress: `start`, `optimise`, `validate`, `regress`, `supersede`
+
+These record the work that follows a finding (spec §38). Each one checks the
+current state and is refused, with nothing recorded, when the order is wrong:
+
+| Command | Moves to | Allowed from |
+|---|---|---|
+| `start <ID>` | in progress | open, accepted |
+| `optimise <ID>` | optimised | in progress |
+| `validate <ID>` | validated | optimised |
+| `regress <ID>` | regressed (spec §37) | optimised |
+| `supersede <ID> --by <OTHER>` | superseded by `OTHER` | any state, except already superseded |
+
+`validate` and `regress` also happen on their own: `compare <NAME>` moves an
+optimised opportunity to **validated** when one of its measured metrics
+improved, and to **regressed** when one of them got worse. Metrics that are
+unchanged or noisy leave it optimised. `ci` only reads the record, so a pull
+request never changes it.
+
+`supersede` requires `OTHER` to be a recorded opportunity different from `ID`.
+`accept` is refused while work is in progress, optimised, validated,
+regressed or superseded, so triage cannot wipe progress; `reopen` returns the
+opportunity to open first.
+
+### `cpu`
+
+Runs each `[[workloads]]` entry under Linux `perf` (spec §8.5). It reports the
+mean of the hardware counters (instructions, cycles, branches, branch misses,
+cache references and misses) over three runs, then the top leaf frames from a
+sampling recording at 499 Hz.
+
+Each hotspot is followed by its source location when its symbol names exactly
+one function in the project, for example `(src/lib.rs:12)`. Ambiguous or
+unnamed frames such as closures are left without a location.
+
+Counters are only available on Linux with `perf` on `PATH`. Anywhere else the
+command prints `CPU counters unavailable` and exits `0`, so the rest of the
+pipeline is unaffected. Windows (ETW/WPR) and macOS (`xctrace`) backends are
+not implemented yet.
+
+### `effectiveness`
+
+Summarises the recorded decisions and outcomes by category (spec §52, §65,
+§80): how many opportunities were seen, dismissed, accepted, optimised,
+validated and regressed, with a dismissal rate and a success rate. The success
+rate is validated work as a share of all judged optimised work.
+
+This is a report over `.tpt-profiler/opportunities.json`. It does not change
+any heuristic or score. Tuning stays a manual decision, based on these rates.
+
+### `ecosystem [ROOT] [--max-depth N] [--shared-weight F] [--top N] [--workers N]`
+
+Scans every Rust repository under `ROOT` (default: `--path`) and reports what
+they share (spec §33, §34, §60). A repository is any directory with a
+`Cargo.toml`; the search stops there, so workspace members belong to their
+repository. `target`, `node_modules` and hidden directories are skipped.
+
+Repositories are analysed on `--workers` threads (default: the machine's
+parallelism, at most 8). The report is the same whatever the worker count.
+
+The scan is static and local only: no `cargo metadata`, no registry access and
+no workloads. A repository whose `Cargo.toml` is not valid TOML, or that cannot
+be read, is listed with its error and the others still run.
+
+Shared opportunities are findings with the same category and text in two or
+more repositories. Their score is the best priority, raised by
+`--shared-weight` (default `0.5`) for each extra repository. Three or more
+repositories get a suggestion to share one helper or primitive (spec §34).
+`--format json` prints the whole report under the schema envelope.
+
+### `reopen <ID>`
+
+Forgets a dismissal, acceptance, snooze, or progress state (spec §38).
+
+`dismiss`, `ignore`, `mark-not-applicable`, `accept`, `snooze`, `start`,
+`optimise`, `validate`, `regress`, `supersede` and `reopen` accept a unique ID
+prefix. An ambiguous or unknown prefix is an error, and nothing is recorded.
+
+### Opportunity record
+
+`baseline` observes the current opportunities into `.tpt-profiler/opportunities.json`,
+so later `ci` runs can tell what is *new* since the reference branch. `ci`
+only reads this file; a pull request does not change the record it is
+compared against. Commit the file to share decisions with the team.
+
+The record is consulted by `opportunities`, which applies stored decisions and
+hides dismissed and snoozed items. `static` and `full` list every finding.
 
 ### `explain <ID>`
 

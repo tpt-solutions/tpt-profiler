@@ -196,7 +196,7 @@
 
 ### 1.10 Baseline & compare (§36)
 - [x] `.tpt-profiler/` directory layout and versioning — `.tpt-profiler/baselines/<name>.json` under `SchemaEnvelope`
-- [x] `baseline` saves runtime measurements (memory/binary/bench as they become available in later phases) — `save_baseline` + `baseline_from_run`. Corrected in Phase 3.1: workload measurements previously never reached the baseline (`measure::collect_runtime` now feeds `baseline`, `compare` and `ci`). Bench measurements are still not included
+- [x] `baseline` saves runtime measurements (memory/binary/bench as they become available in later phases) — `save_baseline` + `baseline_from_run`. Corrected in Phase 3.1: workload measurements previously never reached the baseline (`measure::collect_runtime` now feeds `baseline`, `compare` and `ci`). Criterion bench measurements are included too (`measured_profile` in the CLI)
 - [x] `compare` reports % change for each metric — signed fractional change, `change_percent()` rendering
 - [x] Noise-aware comparison using the statistical engine — measurement confidence gates the verdict: Low-confidence pairs are `Noisy`, never regressions; thresholds from `[ci]`
 - [x] Handle environment mismatch between baseline and current (warn) — OS mismatch sets `environment_warning`
@@ -213,7 +213,7 @@
 - [x] `full` (all applicable analyses)
 - [x] `baseline`
 - [x] `compare`
-- [ ] `report` — partial: `report latest` re-runs the analysis; stored runs need opportunity tracking (Phase 3, §38)
+- [x] `report` — `report latest` re-runs the analysis and applies recorded decisions (dismissed/snoozed hidden, lifecycle shown); `full --save NAME` stores a run and `report NAME` prints it
 - [x] `opportunities` with `--strategy`
 - [x] `explain <id>`
 - [x] Global flags: `--format`, `--output`, `--config`, `--path`, `--quiet`, `--verbose`
@@ -253,13 +253,13 @@
 - [x] Per-OS backend selection — `provider::select_backend` tries providers in preference order, skipping other platforms; concrete backends land in 2.2
 
 ### 2.2 OS profiler integrations
-- [ ] Linux: `perf` (record/stat, parse output)
-- [ ] Windows: ETW / WPR or equivalent
-- [ ] macOS: Instruments / `xctrace` or `sample`
-- [ ] Hardware counters: instructions, cycles, branches, cache misses (§8.5)
-- [ ] Flamegraph/stack-sample ingestion and hotspot extraction
-- [ ] Map hotspots back to functions/spans from static analysis
-- [ ] `cpu` command (§8.5)
+- [x] Linux: `perf` (record/stat, parse output) — `runtime::perf`; Linux only, parsing covered by fixture tests, not yet run against a real `perf` binary
+- [ ] Windows: ETW / WPR or equivalent (not started: needs an ETL parser)
+- [ ] macOS: Instruments / `xctrace` or `sample` (not started)
+- [x] Hardware counters: instructions, cycles, branches, cache misses (§8.5) — Linux `perf stat`
+- [~] Flamegraph/stack-sample ingestion and hotspot extraction — `perf script` leaf frames ranked by samples; flamegraph output not read
+- [x] Map hotspots back to functions/spans from static analysis — `cpu` shows `file:line` when a symbol names exactly one function
+- [x] `cpu` command (§8.5)
 
 ### 2.3 Memory & allocation (`tpt-profiler-memory`, §8.4, §14)
 - [ ] Allocation count/size/frequency profiling
@@ -277,7 +277,7 @@
 - [ ] Lower confidence unless runtime evidence supports it
 
 ### 2.5 Binary analysis (§19)
-- [ ] Binary and section sizes
+- [~] Binary and section sizes — whole-binary size per release bin target (`binary:<target>_bytes`, opt-in via `[profiling] binary`); section-level sizes not yet
 - [ ] Debug info and symbol counts
 - [ ] Duplicated code detection
 - [ ] Per-dependency size contribution
@@ -294,19 +294,19 @@
 
 ### 2.7 Richer static detection
 - [~] I/O analysis (§16): repeated reads, small writes, sync I/O, repeated parsing — `io` detector covers loop-invariant `fs::read*`/`File::open`, per-iteration `flush`/`sync_*` (Medium) and `write_all` (Low, unbuffered). Repeated parsing not done
-- [~] Serialisation analysis (§17): JSON/XML/YAML/binary, repeated ser/de — `serialisation` detector covers serde_json, toml, serde_yaml, bincode, rmp_serde and ciborium calls on loop-invariant input. XML not done
+- [x] Serialisation analysis (§17): JSON/XML/YAML/binary, repeated ser/de — `serialisation` detector covers serde_json, toml, serde_yaml, bincode, rmp_serde, ciborium, quick-xml and serde-xml-rs calls on loop-invariant input
 - [ ] Richer SIMD detection (§12), including image/audio/DSP/crypto kernels
-- [ ] Algorithmic complexity heuristics
+- [x] Algorithmic complexity heuristics — nested loops over the same collection (Low), `remove(0)`/`insert(0, …)` in loops (Low, receiver may be a map), sorting inside loops (Medium). Lookup-table and cache-aware analysis not yet
 - [ ] Combine static + runtime evidence to raise confidence
 
 ### 2.8 Ecosystem scanning (§33, §34, §60)
-- [ ] `ecosystem <path>` command: discover many repos
-- [ ] Parallel/incremental multi-repo scan (§72)
+- [x] `ecosystem <path>` command: discover many repos
+- [~] Parallel/incremental multi-repo scan (§72) — parallel ✓ (`--workers`); incremental across runs not done
 - [ ] Shared-opportunity detection across repos (§34)
-- [ ] Ecosystem priority weighting with configurable shared-infra value (§60)
-- [ ] Ecosystem report (§33 format)
-- [ ] Performance tests for scanning 300+ repos, with a memory and time budget
-- [ ] Keep aggregate output readable at 300+ repos (top-N, grouping by category, shared-primitive detection)
+- [x] Ecosystem priority weighting with configurable shared-infra value (§60) — `--shared-weight`
+- [~] Ecosystem report (§33 format) — terminal and JSON; layout not checked against §33
+- [~] Performance tests for scanning 300+ repos, with a memory and time budget — 300-repo test (ignored by default) runs in about 1.4s; no memory budget asserted
+- [x] Keep aggregate output readable at 300+ repos (top-N, grouping by category, shared-primitive detection)
 
 #### 2.8a GitHub clone → analyse → store → confirm-delete workflow
 - [ ] `ecosystem --github <user|org>`: list repos via `gh`/git (explicit opt-in; the network step is never implicit, §70)
@@ -327,7 +327,7 @@
 - [ ] Tests with mocked `gh`/git and a fixture of small local repos
 
 ### 2.9 Quality
-- [ ] Incremental static analysis cache (§72)
+- [x] Incremental static analysis cache (§72) — per-file content hash in `.tpt-profiler/cache/`; reports identical with or without it
 - [ ] Tests for each backend, with mocks where the tool is absent
 - [ ] Release v0.2.0
 
@@ -338,16 +338,16 @@
 ### 3.1 CI mode (§39)
 - [x] `ci` command — runs workloads, judges against a named baseline, exits `1` on a configured regression
 - [x] `[ci]` config: `fail_on_regression`, `runtime_threshold`, `binary_threshold` (binary threshold parsed; binary analysis is Phase 2.5)
-- [~] Policies: fail on runtime regression ✓; fail on benchmark regression ✓ (any benchmark, not a per-benchmark "critical" marker yet); warn on binary size (needs 2.5); warn on new HIGH opportunity (needs opportunity tracking, 3.4)
+- [~] Policies: fail on runtime regression ✓; fail on benchmark regression ✓ (any benchmark, not a per-benchmark "critical" marker yet); warn on binary size ✓ (opt-in via `[profiling] binary`); warn on new HIGH opportunity ✓ (threshold `[ci] high_priority`, default 70)
 - [x] CI-friendly output (GitHub Actions annotations, summary) — `--format github-annotations` (`::notice` per opportunity) and `--summary <FILE>` (appends Markdown, e.g. to `$GITHUB_STEP_SUMMARY`)
 - [x] Exit codes per policy outcome — fail → `1`; warn and info never change the exit code
 - [x] Example workflow files for GitHub Actions — `docs/examples/github-actions.yml`
 
 ### 3.2 Regression detection (§37)
-- [ ] Per-function / per-benchmark regression detection
-- [ ] Severity and confidence for regressions
-- [ ] Noise handling and thresholds
-- [ ] Regression report format
+- [~] Per-function / per-benchmark regression detection — per-benchmark ✓ (each Criterion benchmark is its own metric, judged against its baseline); per-function not yet (no function-level measurements)
+- [x] Severity and confidence for regressions — `RegressionSeverity` (minor / major at 2× / critical at 5× the threshold); confidence is the weaker side of the pair
+- [x] Noise handling and thresholds — `Low`-confidence pairs are noisy, never regressions; thresholds from `[ci]`
+- [~] Regression report format — graded verdicts in `compare` and `ci` messages; no dedicated regression report document yet
 
 ### 3.3 Output formats
 - [x] JSONL output (§42) — `--format jsonl`, one self-describing object per line
@@ -355,25 +355,25 @@
 - [x] Stable, versioned schema with compatibility tests (§69) — v1 JSON and JSONL shapes frozen in `report/tests/fixtures/`; a shape change fails the golden test
 
 ### 3.4 Persistent opportunity tracking (§38, §52)
-- [ ] Persist opportunities with stable IDs across runs
-- [ ] Match opportunities between runs (same location/category)
-- [ ] Lifecycle transitions: Open → Accepted → In Progress → Optimised → Validated / Regressed / Superseded
-- [ ] Validation workflow: detect → recommend → optimise → profile → compare → validate
-- [ ] False-positive management commands: dismiss, snooze, ignore, mark-not-applicable, mark-accepted
-- [ ] Record reasons for rejection
-- [ ] Snooze expiry
-- [ ] Store state in `.tpt-profiler/` (git-friendly)
+- [x] Persist opportunities with stable IDs across runs — `.tpt-profiler/opportunities.json`, written by `baseline`
+- [x] Match opportunities between runs — by stable ID (category, component and description); a changed description is a new opportunity
+- [x] Lifecycle transitions: every state has a command, and transitions are order-checked (`start`, `optimise`, `validate`, `regress`, `supersede`). `compare` derives Validated and Regressed from the metrics an opportunity measured
+- [x] Validation workflow: detect → recommend → optimise → profile → compare → validate
+- [x] False-positive management commands: `dismiss`, `accept`, `snooze`, `reopen`, `ignore` (hidden without a judgement) and `mark-not-applicable` (rejection recorded with the reason) — `mark-accepted` is `accept`
+- [x] Record reasons for rejection — `dismiss --reason`, kept in the record
+- [x] Snooze expiry — `snooze --days N`; a snoozed opportunity reappears automatically
+- [x] Store state in `.tpt-profiler/` (git-friendly) — sorted keys, one file
 
 ### 3.5 Cross-repository aggregation
-- [ ] Aggregated ecosystem opportunity model
-- [ ] Opportunity relationships across repos (§35)
-- [ ] Shared primitive recommendations (§34)
+- [x] Aggregated ecosystem opportunity model — `ecosystem::SharedOpportunity`
+- [~] Opportunity relationships across repos (§35) — shared groups only; no typed relationship edges yet
+- [x] Shared primitive recommendations (§34) — suggested for opportunities in three or more repositories
 
 ### 3.6 Integrations (optional, directional, no hard dependency, §43–47)
-- [ ] `tpt-weave`: export format consumable for engineering plans
-- [ ] `tpt-readme`: performance-status export (§45)
-- [ ] `tpt-cargo-vitals`: machine-readable exchange (§46)
-- [ ] Integration contract tests with fixtures (no dependency on the other repos)
+- [ ] `tpt-weave`: export format consumable for engineering plans (skipped by request)
+- [ ] `tpt-readme`: performance-status export (§45) (skipped by request)
+- [ ] `tpt-cargo-vitals`: machine-readable exchange (§46) (skipped by request)
+- [ ] Integration contract tests with fixtures (no dependency on the other repos) (skipped by request)
 
 ### 3.7 Release
 - [ ] Docs and migration notes
@@ -385,16 +385,16 @@
 
 ### 4.1 WASM (§21)
 - [ ] WASM binary size analysis
-- [ ] Unsupported-dependency detection
+- [x] Unsupported-dependency detection — resolved crates known to need an OS (rayon, mio, socket2, nix, tokio with OS features)
 - [ ] Allocation behaviour in WASM
-- [ ] JS boundary crossing detection
-- [ ] WASM SIMD availability
-- [ ] Native-only assumption detection
-- [ ] Recommendations (§21)
+- [x] JS boundary crossing detection — `wasm_js_boundary`: calls inside loops
+- [~] WASM SIMD availability — flags native x86/AArch64 intrinsics outside a target gate; no `simd128` feature check
+- [x] Native-only assumption detection — `wasm_native_only`: threads, files, processes, sockets outside a target `cfg`
+- [~] Recommendations (§21) — each WASM finding carries a recommendation; no separate report
 
 ### 4.2 GPU (§22)
-- [ ] GPU-suitability indicators and strong-evidence threshold
-- [ ] Branch divergence / workload size / utilisation heuristics
+- [~] GPU-suitability indicators and strong-evidence threshold — `gpu_candidate` indicators at Low confidence; the threshold is the requirement for runtime evidence in the text, not enforced
+- [~] Branch divergence / workload size / utilisation heuristics — divergence (branches and calls exclude a loop) and workload size (literal range ≥ 1024) only
 - [ ] GPU opportunity report
 
 ### 4.3 Energy (§56)
@@ -404,31 +404,31 @@
 
 ### 4.4 Architecture analysis (§57)
 - [ ] Repeated work across modules
-- [ ] Unnecessary conversion layers
-- [ ] Duplicate implementations
-- [ ] Excessive synchronisation
+- [x] Unnecessary conversion layers — `conversion_layer`: owned value built only to be borrowed, or a Vec collected only to be iterated
+- [~] Duplicate implementations — `duplicate_body` within one file; cross-file duplicates need a crate-level pass
+- [~] Excessive synchronisation — `lock_in_loop` for a lock taken on every iteration
 - [ ] Pipeline structure issues
 - [ ] Cross-crate inefficiency
-- [ ] Mark as lower confidence than measurements
+- [x] Mark as lower confidence than measurements — architecture findings are Low or Medium confidence
 
 ### 4.5 Concurrency analysis
-- [ ] Lock contention and excessive-synchronisation detection
+- [~] Lock contention and excessive-synchronisation detection — static `lock_in_loop` only; no contention measurement
 - [ ] Thread utilisation / underused cores
 
 ### 4.6 Learning & history
-- [ ] Learn from dismissals/acceptances to tune heuristics (§52)
-- [ ] Track optimisation effectiveness over time (§65)
-- [ ] Success metric: how often the top recommendation yields a worthwhile improvement (§80)
+- [~] Learn from dismissals/acceptances to tune heuristics (§52) — `effectiveness` reports dismissal rates per category; no automatic tuning, by design
+- [~] Track optimisation effectiveness over time (§65) — per-category snapshot via `effectiveness`; no time series yet
+- [x] Success metric: how often the top recommendation yields a worthwhile improvement (§80) — `effectiveness` success rate: validated over judged optimised work
 
 ### 4.7 Plugin architecture (§67)
-- [ ] Stable analyzer plugin interface
-- [ ] Loading mechanism (compiled-in features first; external later)
-- [ ] Plugin documentation and an example analyzer
+- [x] Stable analyzer plugin interface — `Analyzer` trait and `StaticEngine::register`
+- [~] Loading mechanism (compiled-in features first; external later) — compiled-in via `register`; external loading not started
+- [x] Plugin documentation and an example analyzer — `docs/contributing-analyzers.md`, `examples/custom_analyzer.rs`
 
 ### 4.8 Secondary language support (§3.2)
-- [ ] Evaluate C/C++, Python analysis feasibility
-- [ ] `tpt-simd` awareness: suggest as implementation source when present (§44), still optional
-- [ ] `tpt-telos` hook points for equivalence verification (§47)
+- [x] Evaluate C/C++, Python analysis feasibility — `docs/secondary-languages.md` (recommends a Python spike first)
+- [ ] `tpt-simd` awareness: suggest as implementation source when present (§44), still optional (skipped by request)
+- [ ] `tpt-telos` hook points for equivalence verification (§47) (skipped by request)
 
 ### 4.9 Release
 - [ ] Release v0.4.0
@@ -437,7 +437,7 @@
 
 ## Phase 5 — Experimental (§66, kept outside the core)
 
-- [ ] Decide whether any of this belongs in the core (default: separate system)
+- [x] Decide whether any of this belongs in the core (default: separate system) — decided: separate system, per the default
 - [ ] Automatic experiment generation
 - [ ] Candidate optimisation generation
 - [ ] Automated benchmark comparison of candidates
@@ -450,7 +450,7 @@
 ## Cross-cutting (ongoing)
 
 ### Release & publishing
-- [ ] Release checklist doc
+- [x] Release checklist doc — `docs/release-checklist.md`
 - [ ] Publish crates to crates.io in dependency order (model first)
 - [ ] Verify `cargo install tpt-profiler-cli` works on all 3 OSes
 - [ ] Prebuilt binaries via CI releases
@@ -464,11 +464,11 @@
 - [ ] Periodic dependency and licence audit (cargo-deny)
 
 ### Documentation
-- [ ] User guide (scan → full → baseline → compare workflow, §77)
-- [ ] Scoring model explainer (impact/confidence/effort/risk/generality)
-- [ ] How to read evidence and confidence
-- [ ] Config reference
-- [ ] Contributor guide for adding analyzers
+- [x] User guide (scan → full → baseline → compare workflow, §77) — `docs/user-guide.md`
+- [x] Scoring model explainer (impact/confidence/effort/risk/generality) — `docs/scoring.md`
+- [x] How to read evidence and confidence — `docs/evidence-and-confidence.md`
+- [x] Config reference — `docs/config.md`
+- [x] Contributor guide for adding analyzers — `docs/contributing-analyzers.md`
 
 ### Principles to check each release
 - [ ] Measure first, recommend second, optimise third, measure again (§81)
