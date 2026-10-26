@@ -6,6 +6,7 @@
 //! mandatory: a single execution is never definitive.
 
 pub mod measure;
+pub mod perf;
 pub mod process;
 pub mod provider;
 pub mod stats;
