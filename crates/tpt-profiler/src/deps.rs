@@ -155,6 +155,11 @@ pub fn analyze(metadata: &Metadata) -> DependencyReport {
                 ));
             }
 
+            // wasm32 compatibility (spec §21): crates that need an OS.
+            if let Some(finding) = wasm_finding(&package.name, &node.features) {
+                report.findings.push(finding);
+            }
+
             // Feature surface heuristic (spec §18: feature usage).
             if node.features.len() >= 8 {
                 report.findings.push(DependencyFinding::new(
@@ -179,6 +184,38 @@ pub fn analyze(metadata: &Metadata) -> DependencyReport {
 
     report.findings.sort_by(|a, b| a.title.cmp(&b.title));
     report
+}
+
+/// The spec-§21 finding for a resolved crate that cannot run on `wasm32`.
+fn wasm_finding(name: &str, resolved: &[impl ToString]) -> Option<DependencyFinding> {
+    let features: Vec<String> = resolved.iter().map(ToString::to_string).collect();
+    let reason = wasm_unsupported(name, &features)?;
+    Some(DependencyFinding::new(
+        format!("{name} is not supported on wasm32"),
+        format!(
+            "`{name}` {reason}; a wasm32 build will fail or misbehave. Gate it with              `cfg(not(target_arch = \"wasm32\"))` or pick a wasm-capable alternative              (spec §21: unsupported-dependency detection)"
+        ),
+        Confidence::Low,
+    ))
+}
+
+/// Why a resolved crate does not build or run on `wasm32`, when it is known
+/// not to. Matches a small, well-known set; anything else is assumed fine.
+#[must_use]
+pub fn wasm_unsupported(name: &str, features: &[String]) -> Option<&'static str> {
+    let enabled = |wanted: &[&str]| {
+        features
+            .iter()
+            .any(|feature| wanted.contains(&feature.as_str()))
+    };
+    match name {
+        "rayon" => Some("needs OS threads, which wasm32 does not provide by default"),
+        "mio" | "socket2" | "nix" => Some("wraps OS sockets or system calls"),
+        "tokio" if enabled(&["net", "fs", "process", "signal", "rt-multi-thread"]) => {
+            Some("enables tokio features that need an operating system")
+        }
+        _ => None,
+    }
 }
 
 fn normalise_name(name: &str) -> String {
@@ -261,6 +298,14 @@ fn size_of(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wasm_unsupported_flags_os_bound_crates_only() {
+        assert!(wasm_unsupported("rayon", &[]).is_some());
+        assert!(wasm_unsupported("tokio", &["net".to_owned()]).is_some());
+        assert!(wasm_unsupported("tokio", &["macros".to_owned()]).is_none());
+        assert!(wasm_unsupported("serde", &[]).is_none());
+    }
+
     use super::*;
 
     fn metadata_from(json: &str) -> Metadata {

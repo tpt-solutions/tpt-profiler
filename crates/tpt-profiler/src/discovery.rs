@@ -21,7 +21,13 @@ use tpt_profiler_model::hierarchy::{
 /// workspaces (no root package) list their members.
 pub fn discover_repository(start: &Path) -> Result<(Repository, PathBuf), Error> {
     let metadata = load_metadata(start)?;
+    Ok(repository_from_metadata(&metadata))
+}
 
+/// Maps already-loaded cargo metadata onto a [`Repository`], so one load
+/// can serve discovery and dependency analysis.
+#[must_use]
+pub fn repository_from_metadata(metadata: &cargo_metadata::Metadata) -> (Repository, PathBuf) {
     let workspace_root = metadata.workspace_root.clone();
     let member_ids: std::collections::HashSet<_> = metadata.workspace_members.iter().collect();
     let mut packages: Vec<&Package> = metadata
@@ -52,7 +58,7 @@ pub fn discover_repository(start: &Path) -> Result<(Repository, PathBuf), Error>
         name,
         projects: vec![project],
     };
-    Ok((repository, root.to_path_buf()))
+    (repository, root.to_path_buf())
 }
 
 /// Loads `cargo metadata` for the workspace at or above `start`

@@ -16,9 +16,10 @@ use tpt_profiler_model::error::Error;
 use tpt_profiler_model::hierarchy::Repository;
 use tpt_profiler_model::{AnalysisOutcome, Category, Evidence, Opportunity, ProfileRun};
 
+use crate::baseline::STATE_DIR;
 use crate::config::{Config, ProfilingConfig};
 use crate::deps::{self, DependencyFinding, DependencyReport};
-use crate::discovery::{discover_repository, load_metadata};
+use crate::discovery::{load_metadata, repository_from_metadata};
 use tpt_profiler_static::{Finding, StaticEngine, StaticReport};
 
 /// Everything one `full`-style run produced.
@@ -53,11 +54,58 @@ pub fn analyse_with(
     config: &Config,
     engine: &StaticEngine,
 ) -> Result<AnalysisRun, Error> {
-    let (repository, workspace_root) = discover_repository(root)?;
-    let static_report = engine.analyze_path(&workspace_root)?;
     let metadata = load_metadata(root)?;
+    let (repository, workspace_root) = repository_from_metadata(&metadata);
+    let cache_path = workspace_root
+        .join(STATE_DIR)
+        .join("cache")
+        .join(tpt_profiler_static::cache::CACHE_FILE);
+    let static_report = engine.analyze_path_cached(&workspace_root, &cache_path)?;
     let dependency_report = deps::analyze(&metadata);
+    Ok(assemble(
+        config,
+        repository,
+        workspace_root,
+        static_report,
+        dependency_report,
+    ))
+}
 
+/// Static analysis only (spec §70): no `cargo metadata`, so no process
+/// spawn, no registry access and no dependency findings. The repository is
+/// named after its directory and has no crate detail. Used by ecosystem
+/// scans, where hundreds of repositories must run quickly and quietly.
+///
+/// # Errors
+/// Fails when the source tree cannot be walked or a file cannot be read.
+pub fn analyse_static(root: &Path, config: &Config) -> Result<AnalysisRun, Error> {
+    let name = root.file_name().map_or_else(
+        || root.display().to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    let repository = Repository {
+        name,
+        projects: Vec::new(),
+    };
+    let engine = StaticEngine::with_default_analyzers();
+    let static_report = engine.analyze_path(root)?;
+    Ok(assemble(
+        config,
+        repository,
+        root.to_path_buf(),
+        static_report,
+        DependencyReport::default(),
+    ))
+}
+
+/// Turns findings and dependency results into ranked opportunities.
+fn assemble(
+    config: &Config,
+    repository: Repository,
+    workspace_root: PathBuf,
+    static_report: StaticReport,
+    dependency_report: DependencyReport,
+) -> AnalysisRun {
     let mut candidates = Vec::new();
     candidates.extend(findings_to_candidates(
         &repository.name,
@@ -89,7 +137,7 @@ pub fn analyse_with(
         AnalysisOutcome::NoOpportunity => run.no_opportunities = true,
         AnalysisOutcome::Findings(opportunities) => run.opportunities = opportunities,
     }
-    Ok(run)
+    run
 }
 
 /// Wraps a run into a [`ProfileRun`] for persistence (spec §6, §49).

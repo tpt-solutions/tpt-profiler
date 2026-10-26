@@ -63,6 +63,10 @@ pub struct ProfilingConfig {
     pub simd: bool,
     /// Look for parallelism opportunities (spec §13).
     pub parallelism: bool,
+    /// Build release binaries and record their sizes (spec §19). Opt-in:
+    /// a release build is expensive, so `baseline`, `compare` and `ci` skip
+    /// it unless this is set.
+    pub binary: bool,
 }
 
 /// `[benchmarks]` section (spec §40).
@@ -85,6 +89,10 @@ pub struct CiConfig {
     pub runtime_threshold: f64,
     /// Binary-size growth threshold as a fraction (0.05 = warn above 5%).
     pub binary_threshold: f64,
+    /// Priority (0–100) at or above which a newly appearing opportunity is
+    /// reported as HIGH (spec §39). The spec gives no cut-off; 70 is a
+    /// default, not a derived value.
+    pub high_priority: u8,
 }
 
 /// A `[[workloads]]` entry (spec §23): name, command, repetitions.
@@ -134,6 +142,7 @@ impl Default for ProfilingConfig {
             cpu: true,
             simd: true,
             parallelism: true,
+            binary: false,
         }
     }
 }
@@ -151,6 +160,7 @@ impl Default for CiConfig {
             fail_on_regression: true,
             runtime_threshold: 0.10,
             binary_threshold: 0.05,
+            high_priority: 70,
         }
     }
 }
@@ -280,6 +290,12 @@ impl Config {
                     "{name} must be a fraction in 0.0..=1.0, got {threshold}"
                 ));
             }
+        }
+        if self.ci.high_priority > 100 {
+            return Err(format!(
+                "ci.high_priority must be a priority in 0..=100, got {}",
+                self.ci.high_priority
+            ));
         }
         for (name, weight) in [
             ("scoring.impact_weight", self.scoring.impact_weight),

@@ -25,7 +25,7 @@ fn discovers_single_crate_project() {
     assert!(info.has_tests, "tests/smoke.rs must be discovered");
     assert!(info.has_benches, "benches/basic.rs must be discovered");
     assert!(!info.uses_criterion);
-    assert!(info.dependencies.is_empty());
+    assert_eq!(info.dependencies.len(), 0);
 }
 
 #[test]

@@ -14,9 +14,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use tpt_profiler_model::error::{Error, SerializationError};
-use tpt_profiler_model::{
-    Confidence, Environment, FindingKind, Measurement, ProfileRun, SchemaEnvelope,
-};
+use tpt_profiler_model::{Confidence, Environment, Measurement, ProfileRun, SchemaEnvelope};
 
 use crate::config::Config;
 
@@ -115,6 +113,50 @@ pub enum Assessment {
     Noisy,
 }
 
+/// How far a regression overshoots its threshold (spec §37).
+///
+/// The tiers are multiples of the configured threshold, so a `10%`
+/// threshold makes a `20%` change major and a `50%` change critical.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RegressionSeverity {
+    /// Beyond the threshold, but less than [`MAJOR_MULTIPLE`] times it.
+    Minor,
+    /// At least [`MAJOR_MULTIPLE`] times the threshold.
+    Major,
+    /// At least [`CRITICAL_MULTIPLE`] times the threshold.
+    Critical,
+}
+
+/// Multiple of the threshold at which a regression becomes major.
+pub const MAJOR_MULTIPLE: f64 = 2.0;
+/// Multiple of the threshold at which a regression becomes critical.
+pub const CRITICAL_MULTIPLE: f64 = 5.0;
+
+impl RegressionSeverity {
+    /// Classifies a regression of `magnitude` (an absolute fractional
+    /// change) against `threshold`.
+    #[must_use]
+    pub fn classify(magnitude: f64, threshold: f64) -> Self {
+        if magnitude >= threshold * CRITICAL_MULTIPLE {
+            Self::Critical
+        } else if magnitude >= threshold * MAJOR_MULTIPLE {
+            Self::Major
+        } else {
+            Self::Minor
+        }
+    }
+
+    /// Lower-case label for reports (e.g. `major`).
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Minor => "minor",
+            Self::Major => "major",
+            Self::Critical => "critical",
+        }
+    }
+}
+
 /// One metric's comparison result (spec §36, §37).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetricComparison {
@@ -131,6 +173,12 @@ pub struct MetricComparison {
     pub lower_is_better: bool,
     /// The noise-aware judgement.
     pub assessment: Assessment,
+    /// Set only for [`Assessment::Regressed`]: how far past the threshold
+    /// the change went.
+    pub severity: Option<RegressionSeverity>,
+    /// Confidence in the judgement: the weaker of the baseline and current
+    /// measurement confidences.
+    pub confidence: Confidence,
 }
 
 impl MetricComparison {
@@ -187,7 +235,14 @@ pub fn compare(baseline: &StoredBaseline, current: &ProfileRun, config: &Config)
         let lower_is_better = !higher_is_better(&current_measurement.metric);
         let noisy = baseline_measurement.confidence == Confidence::Low
             || current_measurement.confidence == Confidence::Low;
-        let threshold = config.ci.runtime_threshold;
+        let threshold = if current_measurement
+            .metric
+            .starts_with(crate::measure::BINARY_METRIC_PREFIX)
+        {
+            config.ci.binary_threshold
+        } else {
+            config.ci.runtime_threshold
+        };
         let assessment = if noisy {
             Assessment::Noisy
         } else if lower_is_better {
@@ -205,6 +260,8 @@ pub fn compare(baseline: &StoredBaseline, current: &ProfileRun, config: &Config)
         } else {
             Assessment::Unchanged
         };
+        let severity = (assessment == Assessment::Regressed)
+            .then(|| RegressionSeverity::classify(change.abs(), threshold));
         comparisons.push(MetricComparison {
             metric: current_measurement.metric.clone(),
             baseline: baseline_measurement.value,
@@ -212,6 +269,10 @@ pub fn compare(baseline: &StoredBaseline, current: &ProfileRun, config: &Config)
             change,
             lower_is_better,
             assessment,
+            severity,
+            confidence: baseline_measurement
+                .confidence
+                .min(current_measurement.confidence),
         });
     }
     comparisons.sort_by(|a, b| a.metric.cmp(&b.metric));
@@ -226,20 +287,20 @@ fn environment_mismatch(a: &Environment, b: &Environment) -> bool {
     }
 }
 
-/// Extracts the comparable measurements from a run (means only; the
-/// statistical summaries stay in the run record).
+/// Extracts the comparable measurements from a run.
+///
+/// Every measurement the collectors emit is already a comparable value (a
+/// mean, a size, a throughput), so all of them are kept. Statistical
+/// summaries such as sample counts stay in the run record. Deterministic
+/// values such as binary sizes were once dropped here, which silently hid
+/// them from `compare`.
 #[must_use]
 pub fn baseline_from_run(name: &str, run: &ProfileRun) -> StoredBaseline {
     StoredBaseline {
         name: String::from(name),
         created_at: run.started_at,
         environment: run.environment.clone(),
-        measurements: run
-            .measurements
-            .iter()
-            .filter(|measurement| measurement.kind == FindingKind::Statistical)
-            .cloned()
-            .collect(),
+        measurements: run.measurements.clone(),
     }
 }
 
@@ -375,6 +436,50 @@ mod tests {
         let current = run_with(&[("decode_wall_time", 50.0, Confidence::High)]);
         let report = compare(&baseline, &current, &config);
         assert_eq!(report.metrics[0].assessment, Assessment::Noisy);
+    }
+
+    #[test]
+    fn regressions_are_graded_by_multiple_of_threshold() {
+        let config = Config::default(); // runtime_threshold 0.10
+        let baseline = baseline_with(&[
+            ("minor_wall_time", 10.0, Confidence::High),
+            ("major_wall_time", 10.0, Confidence::High),
+            ("critical_wall_time", 10.0, Confidence::High),
+            ("unchanged_wall_time", 10.0, Confidence::High),
+        ]);
+        let current = run_with(&[
+            ("minor_wall_time", 11.5, Confidence::High), // +15%: 1.5x threshold
+            ("major_wall_time", 12.5, Confidence::High), // +25%: 2.5x threshold
+            ("critical_wall_time", 16.0, Confidence::High), // +60%: 6x threshold
+            ("unchanged_wall_time", 10.5, Confidence::High),
+        ]);
+        let report = compare(&baseline, &current, &config);
+        let severity = |name: &str| {
+            report
+                .metrics
+                .iter()
+                .find(|metric| metric.metric == name)
+                .expect("present")
+                .severity
+        };
+        assert_eq!(severity("minor_wall_time"), Some(RegressionSeverity::Minor));
+        assert_eq!(severity("major_wall_time"), Some(RegressionSeverity::Major));
+        assert_eq!(
+            severity("critical_wall_time"),
+            Some(RegressionSeverity::Critical)
+        );
+        assert_eq!(severity("unchanged_wall_time"), None);
+    }
+
+    #[test]
+    fn regression_confidence_is_the_weaker_side() {
+        let config = Config::default();
+        let baseline = baseline_with(&[("decode_wall_time", 10.0, Confidence::High)]);
+        let current = run_with(&[("decode_wall_time", 11.5, Confidence::Medium)]);
+        let report = compare(&baseline, &current, &config);
+        assert_eq!(report.metrics[0].assessment, Assessment::Regressed);
+        assert_eq!(report.metrics[0].confidence, Confidence::Medium);
+        assert_eq!(report.metrics[0].severity, Some(RegressionSeverity::Minor));
     }
 
     #[test]
