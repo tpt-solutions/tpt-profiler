@@ -34,6 +34,8 @@ pub mod discovery;
 pub mod environment;
 pub mod measure;
 pub mod pipeline;
+pub mod runs;
+pub mod tracking;
 
 pub use config::{
     BenchmarksConfig, CiConfig, Config, Overrides, ProfilingConfig, ProjectConfig, ScoringConfig,
