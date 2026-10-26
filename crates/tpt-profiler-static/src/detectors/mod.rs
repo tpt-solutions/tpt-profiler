@@ -7,13 +7,18 @@ use std::collections::HashSet;
 use quote::ToTokens;
 use syn::visit::Visit;
 
+pub mod algorithm;
 pub mod allocation;
+pub mod architecture;
 pub mod clone;
+pub mod concurrency;
 pub mod datastructure;
+pub mod gpu;
 pub mod io;
 pub mod loops;
 pub mod serialisation;
 pub mod vector;
+pub mod wasm;
 
 /// Whether a rendered callee path names `target`, matching whole path
 /// segments and ignoring turbofish arguments: `std::fs::read` and
