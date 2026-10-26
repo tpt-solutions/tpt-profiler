@@ -65,6 +65,13 @@ impl OpportunityId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Wraps an ID that already exists in a record, such as one read back
+    /// from the tracking store. Does not check the format.
+    #[must_use]
+    pub fn from_stored(id: &str) -> Self {
+        Self(String::from(id))
+    }
 }
 
 impl fmt::Display for OpportunityId {

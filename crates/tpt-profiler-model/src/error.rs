@@ -117,6 +117,15 @@ pub enum ProfilingError {
         /// Underlying message.
         message: String,
     },
+    /// A build that a measurement depends on (e.g. `cargo build --release`)
+    /// failed.
+    #[error("`{command}` failed: {message}")]
+    BuildFailed {
+        /// Command line attempted.
+        command: String,
+        /// Exit status and captured diagnostics.
+        message: String,
+    },
     /// The workload exceeded its configured timeout.
     #[error("`{command}` timed out after {timeout_ms} ms")]
     TimedOut {
