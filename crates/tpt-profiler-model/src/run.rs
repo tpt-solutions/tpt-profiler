@@ -51,7 +51,7 @@ mod tests {
     fn new_run_stamps_tool_version() {
         let run = ProfileRun::new("run-1", 1_760_000_000, Environment::default());
         assert_eq!(run.tool_version, crate::version());
-        assert!(run.measurements.is_empty());
-        assert!(run.opportunities.is_empty());
+        assert_eq!(run.measurements.len(), 0);
+        assert_eq!(run.opportunities.len(), 0);
     }
 }

@@ -210,7 +210,7 @@ fn cross(left: &[u32], right: &[u32]) -> u32 {
     total
 }
 ";
-        assert!(algorithm_findings(source).is_empty());
+        assert_eq!(algorithm_findings(source).len(), 0);
     }
 
     #[test]
@@ -252,7 +252,7 @@ fn pop_all(mut stack: Vec<u32>) {
     }
 }
 ";
-        assert!(algorithm_findings(source).is_empty());
+        assert_eq!(algorithm_findings(source).len(), 0);
     }
 
     #[test]
@@ -277,6 +277,6 @@ fn once(mut values: Vec<u32>) -> Vec<u32> {
     values
 }
 ";
-        assert!(algorithm_findings(source).is_empty());
+        assert_eq!(algorithm_findings(source).len(), 0);
     }
 }

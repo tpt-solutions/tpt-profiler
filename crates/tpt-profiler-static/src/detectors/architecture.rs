@@ -213,7 +213,7 @@ fn label(name: &str) -> bool {
     name.is_empty()
 }
 ";
-        assert!(findings_for(source, "conversion_layer").is_empty());
+        assert_eq!(findings_for(source, "conversion_layer").len(), 0);
     }
 
     #[test]
@@ -246,6 +246,6 @@ fn second(values: &[u32]) -> u32 {
 fn a(x: u32) -> u32 { x + 1 }
 fn b(x: u32) -> u32 { x + 1 }
 ";
-        assert!(findings_for(source, "duplicate_body").is_empty());
+        assert_eq!(findings_for(source, "duplicate_body").len(), 0);
     }
 }

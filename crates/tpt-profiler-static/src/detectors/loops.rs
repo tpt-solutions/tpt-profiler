@@ -185,7 +185,7 @@ fn render(items: &[u32], palette: &Palette) -> Vec<u32> {
 struct Palette;
 impl Palette { fn for_item(&self, _item: &u32) -> u32 { 7 } }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]
@@ -198,7 +198,7 @@ fn tick(rounds: u32) {
     }
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]
@@ -233,7 +233,7 @@ fn run(items: &[u32], factor: u32, n: usize) -> usize {
     total
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]

@@ -444,7 +444,7 @@ mod tests {
 
         assert_eq!(report.repositories.len(), 300);
         assert!(report.repositories.iter().all(|repo| repo.error.is_none()));
-        assert!(!report.shared.is_empty());
+        assert_ne!(report.shared.len(), 0);
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -206,7 +206,7 @@ fn once() -> Vec<u32> {
     scratch
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]
@@ -222,6 +222,6 @@ fn build() -> Vec<u32> {
     out
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 }

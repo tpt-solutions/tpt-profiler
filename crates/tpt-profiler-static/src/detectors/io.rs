@@ -191,7 +191,7 @@ fn load(paths: &[String]) {
 }
 fn consume<T>(_value: T) {}
 ";
-        assert!(io_findings(source).is_empty());
+        assert_eq!(io_findings(source).len(), 0);
     }
 
     #[test]
@@ -208,7 +208,7 @@ struct Entry;
 impl Entry { fn path(&self) -> std::path::PathBuf { todo!() } }
 fn consume<T>(_value: T) {}
 "#;
-        assert!(io_findings(source).is_empty());
+        assert_eq!(io_findings(source).len(), 0);
     }
 
     #[test]
@@ -248,7 +248,7 @@ fn load(path: &str) -> String {
     text
 }
 ";
-        assert!(io_findings(source).is_empty());
+        assert_eq!(io_findings(source).len(), 0);
     }
 
     #[test]
@@ -261,6 +261,6 @@ fn scan(rounds: u32) {
 }
 mod myfs { pub fn read(_p: &str) {} }
 "#;
-        assert!(io_findings(source).is_empty());
+        assert_eq!(io_findings(source).len(), 0);
     }
 }

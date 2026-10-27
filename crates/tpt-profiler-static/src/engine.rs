@@ -311,7 +311,7 @@ mod tests {
     fn parse_failures_are_reported_not_fatal() {
         let engine = StaticEngine::with_default_analyzers();
         let (findings, errors) = engine.analyze_str("broken.rs", "fn broken( {");
-        assert!(findings.is_empty());
+        assert_eq!(findings.len(), 0);
         assert_eq!(errors.len(), 1);
         let ParseError::InvalidSyntax { path, line, .. } = &errors[0] else {
             panic!("unexpected error variant: {:?}", errors[0]);
@@ -339,7 +339,7 @@ fn hot(items: &[u32], names: Vec<String>) -> Vec<String> {
         let (first, _) = engine.analyze_str("a.rs", source);
         let (second, _) = engine.analyze_str("a.rs", source);
         assert_eq!(first, second);
-        assert!(!first.is_empty());
+        assert_ne!(first.len(), 0);
         // Deterministic order: sorted by line.
         let lines: Vec<u32> = first
             .iter()

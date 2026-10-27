@@ -153,6 +153,6 @@ mod tests {
         // from this seed).
         let rendered = render_scan(&sample());
         let expected_first = "Repository: multi-crate\n└── Project: multi-crate (/tmp/multi-crate)\n    ├── a 0.1.0 [lib, bench, test]\n    └── b 0.1.0 [lib]\n";
-        assert_eq!(rendered, format!("{expected_first}"));
+        assert_eq!(rendered, expected_first.to_string());
     }
 }

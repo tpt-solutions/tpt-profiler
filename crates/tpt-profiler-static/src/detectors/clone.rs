@@ -129,7 +129,7 @@ fn once(value: &BigStruct) -> BigStruct {
     value.clone()
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]

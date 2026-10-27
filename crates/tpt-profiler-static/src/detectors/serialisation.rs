@@ -206,7 +206,7 @@ fn parse_all(lines: &[String]) {
 struct Record;
 fn consume(_r: Record) {}
 ";
-        assert!(serialisation_findings(source).is_empty());
+        assert_eq!(serialisation_findings(source).len(), 0);
     }
 
     #[test]
@@ -217,7 +217,7 @@ fn once(text: &str) -> Record {
 }
 struct Record;
 ";
-        assert!(serialisation_findings(source).is_empty());
+        assert_eq!(serialisation_findings(source).len(), 0);
     }
 
     #[test]
@@ -230,6 +230,6 @@ fn scan(rounds: u32) {
 }
 fn from_str(_s: &String) {}
 ";
-        assert!(serialisation_findings(source).is_empty());
+        assert_eq!(serialisation_findings(source).len(), 0);
     }
 }

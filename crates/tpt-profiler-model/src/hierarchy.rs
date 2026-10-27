@@ -135,7 +135,7 @@ mod tests {
     fn hierarchy_defaults_compose() {
         let repository = Repository::default();
         assert_eq!(repository.name, "");
-        assert!(repository.projects.is_empty());
+        assert_eq!(repository.projects.len(), 0);
 
         let project = Project {
             name: String::from("tpt-cadence"),

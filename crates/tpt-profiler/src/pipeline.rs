@@ -223,7 +223,7 @@ mod tests {
         assert!(run.static_report.files_analyzed > 0);
         // The fixture is clean: no opportunities is a valid result (§74).
         assert!(run.no_opportunities);
-        assert!(run.opportunities.is_empty());
+        assert_eq!(run.opportunities.len(), 0);
     }
 
     #[test]

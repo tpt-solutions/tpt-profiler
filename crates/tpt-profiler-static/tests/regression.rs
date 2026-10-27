@@ -66,7 +66,7 @@ fn clean_corpus_yields_no_findings() {
     let source = std::fs::read_to_string(corpus_file("clean.rs")).expect("read corpus");
     let engine = StaticEngine::with_default_analyzers();
     let (findings, parse_errors) = engine.analyze_str("clean.rs", &source);
-    assert!(parse_errors.is_empty());
+    assert_eq!(parse_errors.len(), 0);
     assert!(
         findings.is_empty(),
         "false positives on clean code: {findings:?}"
@@ -81,9 +81,9 @@ fn path_analysis_is_deterministic_and_complete() {
     let second = engine.analyze_path(&corpus_dir).expect("analyse");
 
     assert_eq!(first.files_analyzed, 2, "both corpus files analysed");
-    assert!(first.parse_errors.is_empty());
+    assert_eq!(first.parse_errors.len(), 0);
     assert_eq!(first.findings, second.findings, "deterministic (spec §75)");
-    assert!(!first.is_empty());
+    assert_ne!(first.findings.len(), 0);
 
     // Deterministic order: sorted by (file, line).
     for pair in first.findings.windows(2) {

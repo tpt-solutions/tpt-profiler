@@ -383,7 +383,7 @@ mod tests {
     fn empty_build_has_zero_shares_and_no_findings() {
         let summary = summarise(&[], &BTreeSet::new());
         assert!((summary.share_of(UnitKind::Library)).abs() < 1e-9);
-        assert!(findings(&summary).is_empty());
+        assert_eq!(findings(&summary).len(), 0);
     }
 
     #[test]
@@ -418,6 +418,6 @@ mod tests {
         let units: Vec<UnitTiming> = (0..10)
             .map(|index| unit(&format!("crate{index}"), "", 1.0))
             .collect();
-        assert!(findings(&summarise(&units, &BTreeSet::new())).is_empty());
+        assert_eq!(findings(&summarise(&units, &BTreeSet::new())).len(), 0);
     }
 }

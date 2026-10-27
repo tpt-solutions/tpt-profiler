@@ -102,7 +102,7 @@ mod tests {
         let report = run_benches(&temp, &[member("plain", false)], Duration::from_secs(60))
             .expect("no benches is fine");
         assert!(report.no_benchmarks);
-        assert!(report.estimates.is_empty());
+        assert_eq!(report.estimates.len(), 0);
         std::fs::remove_dir_all(&temp).ok();
     }
 
@@ -113,7 +113,10 @@ mod tests {
         // criterion dir yields an empty map rather than an error.
         let temp = std::env::temp_dir().join("tpt-bench-missing-criterion");
         std::fs::create_dir_all(&temp).expect("mkdir");
-        assert!(collect_estimates(&temp.join("target").join("criterion")).is_empty());
+        assert_eq!(
+            collect_estimates(&temp.join("target").join("criterion")).len(),
+            0
+        );
         std::fs::remove_dir_all(&temp).ok();
     }
 }

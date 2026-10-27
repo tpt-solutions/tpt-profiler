@@ -606,7 +606,7 @@ mod tests {
     fn improved_linked_metric_validates_optimised_work() {
         let (mut tracking, id) = optimised("vectorisable loop", "bench.kernel");
         let unrelated = tracking.apply_comparison(&comparison("bench.other", Assessment::Improved));
-        assert!(unrelated.is_empty());
+        assert_eq!(unrelated.len(), 0);
         assert_eq!(tracking.entries[&id].state, LifecycleState::Optimised);
 
         let changed = tracking.apply_comparison(&comparison("bench.kernel", Assessment::Improved));
@@ -623,15 +623,17 @@ mod tests {
     #[test]
     fn noisy_or_unchanged_metrics_leave_the_state_alone() {
         let (mut tracking, id) = optimised("vectorisable loop", "bench.kernel");
-        assert!(
+        assert_eq!(
             tracking
                 .apply_comparison(&comparison("bench.kernel", Assessment::Noisy))
-                .is_empty()
+                .len(),
+            0
         );
-        assert!(
+        assert_eq!(
             tracking
                 .apply_comparison(&comparison("bench.kernel", Assessment::Unchanged))
-                .is_empty()
+                .len(),
+            0
         );
         assert_eq!(tracking.entries[&id].state, LifecycleState::Optimised);
     }
@@ -673,7 +675,7 @@ mod tests {
         let opportunities = [measured_opportunity("vectorisable loop", "bench.kernel")];
         tracking.observe(&opportunities, 100);
         let changed = tracking.apply_comparison(&comparison("bench.kernel", Assessment::Improved));
-        assert!(changed.is_empty());
+        assert_eq!(changed.len(), 0);
     }
 
     #[test]

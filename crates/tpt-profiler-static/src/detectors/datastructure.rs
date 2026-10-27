@@ -149,7 +149,7 @@ fn once(haystack: &[u32]) -> bool {
     haystack.contains(&7)
 }
 ";
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 
     #[test]
@@ -179,6 +179,6 @@ struct Tables { allowed: Vec<u32> }
 ";
         // `table.allowed` is not a simple identifier; type unknown, so
         // the detector stays silent instead of guessing (spec §9).
-        assert!(findings_of(source).is_empty());
+        assert_eq!(findings_of(source).len(), 0);
     }
 }

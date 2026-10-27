@@ -176,7 +176,7 @@ mod tests {
         let path = dir.join(CACHE_FILE);
 
         std::fs::write(&path, "{ not json").expect("write");
-        assert!(load(&path, "k").files.is_empty());
+        assert_eq!(load(&path, "k").files.len(), 0);
 
         let other = StaticCache {
             format: FORMAT,
@@ -190,7 +190,7 @@ mod tests {
             )]),
         };
         save(&path, &other).expect("save");
-        assert!(load(&path, "k").files.is_empty());
+        assert_eq!(load(&path, "k").files.len(), 0);
         assert_eq!(load(&path, "other-engine").files.len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }

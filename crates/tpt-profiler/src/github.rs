@@ -923,7 +923,7 @@ mod tests {
     fn batches_respect_the_budget_and_isolate_oversized_repositories() {
         assert_eq!(plan_batches(&[4, 4, 4], 8), vec![vec![0, 1], vec![2]]);
         assert_eq!(plan_batches(&[20, 1], 8), vec![vec![0], vec![1]]);
-        assert!(plan_batches(&[], 8).is_empty());
+        assert_eq!(plan_batches(&[], 8).len(), 0);
     }
 
     #[test]

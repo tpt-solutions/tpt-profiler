@@ -190,7 +190,7 @@ mod tests {
             environment_warning: None,
         };
         let outcomes = evaluate(&comparison, &policy(true));
-        assert!(outcomes.is_empty());
+        assert_eq!(outcomes.len(), 0);
     }
 
     #[test]

@@ -396,8 +396,8 @@ mod tests {
         );
         let report = analyze(&metadata);
         assert_eq!(report.total_packages, 1);
-        assert!(report.duplicates.is_empty());
-        assert!(report.findings.is_empty());
+        assert_eq!(report.duplicates.len(), 0);
+        assert_eq!(report.findings.len(), 0);
         assert_eq!(report.transitive_only, 0);
     }
 

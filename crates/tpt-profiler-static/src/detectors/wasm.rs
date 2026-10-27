@@ -314,7 +314,7 @@ fn load() -> String {
     std::fs::read_to_string("data.txt").unwrap()
 }
 "#;
-        assert!(wasm_findings(source, "wasm_native_only").is_empty());
+        assert_eq!(wasm_findings(source, "wasm_native_only").len(), 0);
     }
 
     #[test]
@@ -361,7 +361,7 @@ fn add(a: v128, b: v128) -> v128 {
     core::arch::wasm32::u32x4_add(a, b)
 }
 "#;
-        assert!(wasm_findings(source, "wasm_simd_intrinsics").is_empty());
+        assert_eq!(wasm_findings(source, "wasm_simd_intrinsics").len(), 0);
     }
 
     #[test]
@@ -371,6 +371,6 @@ fn draw(point: f64) -> f64 {
     js_sys::Math::sqrt(point)
 }
 ";
-        assert!(wasm_findings(source, "wasm_js_boundary").is_empty());
+        assert_eq!(wasm_findings(source, "wasm_js_boundary").len(), 0);
     }
 }

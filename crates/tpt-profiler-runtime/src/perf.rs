@@ -245,7 +245,7 @@ app 100 [000] 1.003: cycles:
 
     #[test]
     fn stat_parsing_ignores_prose_and_blank_lines() {
-        assert!(parse_stat("perf: something went wrong\n\n").is_empty());
+        assert_eq!(parse_stat("perf: something went wrong\n\n").len(), 0);
     }
 
     #[test]
@@ -275,6 +275,6 @@ app 100 [000] 1.003: cycles:
 
     #[test]
     fn empty_script_has_no_hotspots() {
-        assert!(parse_script("").is_empty());
+        assert_eq!(parse_script("").len(), 0);
     }
 }

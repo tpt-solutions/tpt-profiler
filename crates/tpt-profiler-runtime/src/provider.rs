@@ -239,7 +239,7 @@ mod tests {
         let providers: [&dyn EvidenceProvider; 1] = [&elsewhere];
         let rejections = select_backend(&providers, Platform::Linux, TIMEOUT)
             .expect_err("no provider targets Linux");
-        assert!(rejections.is_empty());
+        assert_eq!(rejections.len(), 0);
     }
 
     #[test]

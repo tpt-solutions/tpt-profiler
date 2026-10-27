@@ -44,6 +44,6 @@ mod tests {
     fn default_environment_is_empty() {
         let environment = Environment::default();
         assert_eq!(environment.os, None);
-        assert!(environment.opt_flags.is_empty());
+        assert_eq!(environment.opt_flags.len(), 0);
     }
 }

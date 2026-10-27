@@ -148,7 +148,7 @@ fn clamp(data: &mut [f32]) {
     }
 }
 ";
-        assert!(gpu_findings(source).is_empty());
+        assert_eq!(gpu_findings(source).len(), 0);
     }
 
     #[test]
@@ -163,6 +163,6 @@ fn scale(data: &mut [f32], n: usize) {
     }
 }
 ";
-        assert!(gpu_findings(source).is_empty());
+        assert_eq!(gpu_findings(source).len(), 0);
     }
 }

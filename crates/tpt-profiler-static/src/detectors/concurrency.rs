@@ -123,7 +123,7 @@ fn touch(slots: &[Mutex<u32>]) {
     }
 }
 ";
-        assert!(lock_findings(source).is_empty());
+        assert_eq!(lock_findings(source).len(), 0);
     }
 
     #[test]
@@ -134,6 +134,6 @@ fn once(shared: &Mutex<u32>) {
     *shared.lock().unwrap() += 1;
 }
 ";
-        assert!(lock_findings(source).is_empty());
+        assert_eq!(lock_findings(source).len(), 0);
     }
 }
