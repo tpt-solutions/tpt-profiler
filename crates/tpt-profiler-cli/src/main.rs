@@ -100,6 +100,15 @@ enum CliCommand {
     /// Hardware counters and hotspots of the workloads under Linux `perf`
     /// (spec §8.5).
     Cpu,
+    /// Time a clean and an incremental workspace build and report where
+    /// compile cost sits (spec §8.6, §20). Uses `.tpt-profiler/build-target`.
+    Build,
+    /// Peak resident memory of each workload, sampled from `/proc` while it
+    /// runs (spec §8.4, §14). Linux only; a lower bound.
+    Memory,
+    /// Package energy used by each workload run, from Linux RAPL counters
+    /// (spec §56). System-wide, so noisy; Linux only, often root-only.
+    Energy,
     /// Scan many repositories under a directory and report what they share
     /// (spec §33, §34, §60). Static and local only.
     Ecosystem {
@@ -117,6 +126,37 @@ enum CliCommand {
         /// Repositories analysed at once.
         #[arg(long, default_value_t = tpt_profiler::ecosystem::default_workers())]
         workers: usize,
+        /// Instead of a local scan, list this GitHub owner's repositories,
+        /// clone the Rust ones, analyse them and store the results (spec §70).
+        /// Uses `gh` and `git` as already logged in.
+        #[arg(long, value_name = "OWNER")]
+        github: Option<String>,
+        /// With `--github`: only repositories matching this glob (repeatable).
+        /// A pattern without a slash matches the repository name alone.
+        #[arg(long = "include", value_name = "GLOB", requires = "github")]
+        include: Vec<String>,
+        /// With `--github`: skip repositories matching this glob (repeatable).
+        #[arg(long = "exclude", value_name = "GLOB", requires = "github")]
+        exclude: Vec<String>,
+        /// With `--github`: most repositories to clone after filtering.
+        #[arg(long, default_value_t = 50, requires = "github")]
+        max_repos: usize,
+        /// With `--github`: most clone data on disk at once, in megabytes.
+        #[arg(long, default_value_t = tpt_profiler::github::DEFAULT_DISK_BUDGET_KB / 1024, requires = "github")]
+        disk_budget_mb: u64,
+        /// With `--github`: where clones go (default: `.tpt-profiler/clones`).
+        #[arg(long, value_name = "DIR", requires = "github")]
+        cache_dir: Option<PathBuf>,
+        /// With `--github`: delete clones over the budget and at the end,
+        /// without asking.
+        #[arg(long, requires = "github", conflicts_with = "keep")]
+        yes: bool,
+        /// With `--github`: keep clones and stop at the budget, without asking.
+        #[arg(long, requires = "github")]
+        keep: bool,
+        /// With `--github`: report stored results only; no network, no clones.
+        #[arg(long, requires = "github")]
+        from_store: bool,
     },
     /// Run every applicable analysis (spec §8.7).
     Full {
@@ -289,6 +329,10 @@ fn overrides_from(disabled: &[Mode]) -> tpt_profiler::config::Overrides {
     overrides
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one arm per subcommand; the dispatch is flat by design"
+)]
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let context = commands::Context {
@@ -315,12 +359,49 @@ fn main() -> ExitCode {
         CliCommand::Bench => commands::bench(&context),
         CliCommand::Effectiveness => commands::effectiveness(&context),
         CliCommand::Cpu => commands::cpu(&context),
+        CliCommand::Build => commands::build(&context),
+        CliCommand::Memory => commands::memory(&context),
+        CliCommand::Energy => commands::energy(&context),
+        CliCommand::Ecosystem {
+            shared_weight,
+            top,
+            github: Some(owner),
+            include,
+            exclude,
+            max_repos,
+            disk_budget_mb,
+            cache_dir,
+            yes,
+            keep,
+            from_store,
+            ..
+        } => {
+            let cleanup = match (yes, keep) {
+                (true, _) => tpt_profiler::github::CleanupPolicy::Yes,
+                (_, true) => tpt_profiler::github::CleanupPolicy::Keep,
+                _ => tpt_profiler::github::CleanupPolicy::Ask,
+            };
+            let args = commands::GithubArgs {
+                owner,
+                include,
+                exclude,
+                max_repos,
+                disk_budget_kb: disk_budget_mb.saturating_mul(1024),
+                cache_dir,
+                cleanup,
+                from_store,
+                shared_weight,
+                top,
+            };
+            commands::ecosystem_github(&context, &args)
+        }
         CliCommand::Ecosystem {
             root,
             max_depth,
             shared_weight,
             top,
             workers,
+            ..
         } => {
             let root = root.unwrap_or_else(|| context.path.clone());
             let options = tpt_profiler::ecosystem::EcosystemOptions {

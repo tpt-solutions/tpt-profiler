@@ -193,7 +193,7 @@ fn wasm_finding(name: &str, resolved: &[impl ToString]) -> Option<DependencyFind
     Some(DependencyFinding::new(
         format!("{name} is not supported on wasm32"),
         format!(
-            "`{name}` {reason}; a wasm32 build will fail or misbehave. Gate it with              `cfg(not(target_arch = \"wasm32\"))` or pick a wasm-capable alternative              (spec §21: unsupported-dependency detection)"
+            "`{name}` {reason}; a wasm32 build will fail or misbehave. Gate it with `cfg(not(target_arch = \"wasm32\"))` or pick a wasm-capable alternative              (spec §21: unsupported-dependency detection)"
         ),
         Confidence::Low,
     ))

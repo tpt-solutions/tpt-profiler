@@ -172,14 +172,40 @@ pub fn scan(root: &Path, options: &EcosystemOptions) -> EcosystemReport {
     let analysed = analyse_all(&paths, options.workers);
 
     let mut repositories = Vec::with_capacity(analysed.len());
-    let mut sharing: BTreeMap<(String, String), Sharing> = BTreeMap::new();
+    let mut findings = Vec::with_capacity(analysed.len());
     for repository in analysed {
-        for (category, description, priority) in repository.findings {
+        findings.push((repository.summary.name.clone(), repository.findings));
+        repositories.push(repository.summary);
+    }
+    let shared = shared_from(findings, options.shared_weight);
+
+    EcosystemReport {
+        root: root.to_path_buf(),
+        repositories,
+        shared,
+    }
+}
+
+/// Ranks opportunities found in more than one repository (spec §34, §60).
+///
+/// Each item is a repository name with its `(category, finding text,
+/// priority)` findings. An opportunity is shared when at least two
+/// repositories report the same category and text. Ranking is by best
+/// priority, weighted up for each extra repository, so the same result comes
+/// out whether the findings were just analysed or read back from a store.
+#[must_use]
+pub fn shared_from<I, F>(repositories: I, shared_weight: f64) -> Vec<SharedOpportunity>
+where
+    I: IntoIterator<Item = (String, F)>,
+    F: IntoIterator<Item = (String, String, Option<u8>)>,
+{
+    let mut sharing: BTreeMap<(String, String), Sharing> = BTreeMap::new();
+    for (name, findings) in repositories {
+        for (category, description, priority) in findings {
             let entry = sharing.entry((category, description)).or_default();
-            entry.repositories.insert(repository.summary.name.clone());
+            entry.repositories.insert(name.clone());
             entry.best_priority = entry.best_priority.max(priority);
         }
-        repositories.push(repository.summary);
     }
 
     let mut shared: Vec<SharedOpportunity> = sharing
@@ -193,7 +219,7 @@ pub fn scan(root: &Path, options: &EcosystemOptions) -> EcosystemReport {
                 description,
                 repositories: entry.repositories.into_iter().collect(),
                 best_priority: entry.best_priority,
-                score: f64::from(best) * (1.0 + options.shared_weight * extra_repositories(count)),
+                score: f64::from(best) * (1.0 + shared_weight * extra_repositories(count)),
                 suggestion: suggestion_for(count),
             }
         })
@@ -204,12 +230,7 @@ pub fn scan(root: &Path, options: &EcosystemOptions) -> EcosystemReport {
             .then_with(|| a.category.cmp(&b.category))
             .then_with(|| a.description.cmp(&b.description))
     });
-
-    EcosystemReport {
-        root: root.to_path_buf(),
-        repositories,
-        shared,
-    }
+    shared
 }
 
 /// Repositories beyond the first, as a weight for the shared score.
@@ -309,7 +330,9 @@ fn suggestion_for(count: usize) -> String {
 /// Analyses one repository statically. Errors come back as text so the
 /// scan can record them and move on. A manifest that is not valid TOML is
 /// reported here, because the static path never asks cargo to read it.
-fn analyse_repository(path: &Path) -> Result<Vec<tpt_profiler_model::Opportunity>, String> {
+pub(crate) fn analyse_repository(
+    path: &Path,
+) -> Result<Vec<tpt_profiler_model::Opportunity>, String> {
     let manifest = path.join("Cargo.toml");
     let text = std::fs::read_to_string(&manifest)
         .map_err(|error| format!("could not read {}: {error}", manifest.display()))?;

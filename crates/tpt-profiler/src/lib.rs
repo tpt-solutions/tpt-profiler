@@ -27,12 +27,14 @@
 //! Runnable version: `cargo run -p tpt-profiler --example analyse -- <path>`.
 
 pub mod baseline;
+pub mod build_time;
 pub mod ci;
 pub mod config;
 pub mod deps;
 pub mod discovery;
 pub mod ecosystem;
 pub mod environment;
+pub mod github;
 pub mod measure;
 pub mod pipeline;
 pub mod runs;

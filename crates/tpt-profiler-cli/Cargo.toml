@@ -21,6 +21,7 @@ tpt-profiler.workspace = true
 tpt-profiler-model.workspace = true
 tpt-profiler-opportunity.workspace = true
 tpt-profiler-bench.workspace = true
+tpt-profiler-build.workspace = true
 tpt-profiler-report.workspace = true
 tpt-profiler-runtime.workspace = true
 clap.workspace = true

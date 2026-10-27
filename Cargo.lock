@@ -413,9 +413,9 @@ dependencies = [
 
 [[package]]
 name = "ignore"
-version = "0.4.30"
+version = "0.4.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b009b6744c1445efd7244084e25e498636412effb6760b55067553baa925cc7"
+checksum = "6d89fd380afde86567dfba715db065673989d6253f42b88179abd3eae47bda4b"
 dependencies = [
  "crossbeam-deque",
  "globset",
@@ -900,6 +900,7 @@ dependencies = [
  "serde_json",
  "toml 1.1.8+spec-1.1.0",
  "tpt-profiler-bench",
+ "tpt-profiler-build",
  "tpt-profiler-model",
  "tpt-profiler-opportunity",
  "tpt-profiler-runtime",
@@ -920,6 +921,7 @@ dependencies = [
 name = "tpt-profiler-build"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "tpt-profiler-model",
 ]
 
@@ -935,6 +937,7 @@ dependencies = [
  "serde_json",
  "tpt-profiler",
  "tpt-profiler-bench",
+ "tpt-profiler-build",
  "tpt-profiler-model",
  "tpt-profiler-opportunity",
  "tpt-profiler-report",

@@ -24,6 +24,7 @@ tpt-profiler-opportunity.workspace = true
 tpt-profiler-static.workspace = true
 tpt-profiler-runtime.workspace = true
 tpt-profiler-bench.workspace = true
+tpt-profiler-build.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

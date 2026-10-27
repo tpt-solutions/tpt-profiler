@@ -218,6 +218,62 @@ command prints `CPU counters unavailable` and exits `0`, so the rest of the
 pipeline is unaffected. Windows (ETW/WPR) and macOS (`xctrace`) backends are
 not implemented yet.
 
+### `build`
+
+Times two `cargo build --workspace --timings` runs (spec §8.6, §20). The first
+builds from an empty directory, giving the clean time. The second follows a
+touch of one workspace crate's root source file, giving the incremental time.
+The touch changes only the file's modification time, which is restored
+afterwards; the file's contents are never written.
+
+Both builds use `.tpt-profiler/build-target`, which the command clears first.
+Your own `target/` directory is never touched. Ignore that directory in version
+control; this repository's `.gitignore` already does.
+
+The report lists the time split between library, build-script and proc-macro
+units, the ten most expensive crates, and findings where cost concentrates:
+build scripts or proc-macros above 10% and 15% of unit time, and any single
+crate above 25%. Unit times are summed over parallel jobs, so shares describe
+where compile work goes, not how long the build took.
+
+Every finding is `Low` confidence because each build is a single timed run.
+`--format json` prints the same data under the schema envelope: clean and
+incremental seconds, the per-kind split, every crate, the findings and the
+measurements that a baseline would store.
+
+Feature-combination cost (spec §20) is not measured yet.
+
+### `memory`
+
+Runs each `[[workloads]]` entry once and reports its peak resident memory
+(spec §8.4, §14). The value is sampled from `/proc/<pid>/status` (`VmHWM`) about
+every 10 ms while the workload runs, and the largest reading is kept.
+
+The result is a lower bound. A workload that allocates heavily in its last few
+milliseconds and exits before the next poll can read less than its true peak.
+Allocation counts and sizes need a counting allocator, which the workspace
+cannot ship because it forbids `unsafe`; they are not reported.
+
+Linux only. Elsewhere the command prints `peak memory unavailable` and exits
+`0`. The measurement is `memory:<workload>_peak_rss_bytes`, at Low confidence
+because it is one run. `--format json` prints the same data under the schema
+envelope.
+
+### `energy`
+
+Runs each `[[workloads]]` entry once between two readings of the Linux RAPL
+package counters under `/sys/class/powercap` (spec §56). Each top-level
+`intel-rapl:<n>` zone is summed, and a counter wrap is handled through its
+`max_energy_range_uj`.
+
+The counter is system-wide, so any other load on the machine during the run is
+included. Treat the value as an upper bound with Low confidence. Recent kernels
+make the counter readable only by root. When it cannot be read, the command
+prints `package energy unavailable` and exits `0`. GPU energy and
+performance-per-watt are not reported.
+
+The measurement is `energy:<workload>_joules`.
+
 ### `effectiveness`
 
 Summarises the recorded decisions and outcomes by category (spec §52, §65,
@@ -247,6 +303,44 @@ more repositories. Their score is the best priority, raised by
 `--shared-weight` (default `0.5`) for each extra repository. Three or more
 repositories get a suggestion to share one helper or primitive (spec §34).
 `--format json` prints the whole report under the schema envelope.
+
+### `ecosystem --github OWNER [--include GLOB]… [--exclude GLOB]… [--max-repos N] [--disk-budget-mb MB] [--cache-dir DIR] [--yes | --keep]`
+
+Lists `OWNER`'s repositories on GitHub, analyses the Rust ones and stores the
+results (spec §70). This is the only command that touches the network, and it
+runs only when you name an owner. It uses `gh` and `git` as already logged in;
+no token is read or stored by the tool.
+
+Steps, in order:
+
+1. `gh repo list` lists the owner's repositories. Forks, archived repositories,
+   repositories not detected as Rust, and repositories matching `--exclude`
+   are skipped. With `--include`, only matching repositories are kept. A
+   pattern with a slash matches `owner/name`; one without matches the name.
+2. `git ls-remote` reads each head commit without cloning. A result already
+   stored for that commit is reused, so an interrupted or repeated run does not
+   clone again.
+3. The rest are shallow-cloned (`--depth 1`) into the clone directory, at most
+   `--max-repos` in all. Clones are made in batches whose estimated size fits
+   `--disk-budget-mb` (default 2048). GitHub's reported size is the estimate.
+4. Each result is stored in `.tpt-profiler/github/<owner>__<name>@<commit>.json`,
+   independent of the clone. A repository whose analysis failed is not stored,
+   so the next run retries it. A repository with no `Cargo.toml` is stored as
+   `no_manifest`.
+5. Clones are deleted only when they carry the marker file this tool writes
+   and sit directly under the clone directory. Anything else there is refused.
+
+Cleanup is decided by the flags. With `--yes`, clones are deleted when the
+budget is reached and at the end of the run. With `--keep`, clones stay, and a
+run that reaches the budget stops and says so. With neither, a terminal run asks
+before each deletion, and a non-terminal run keeps the clones.
+
+`--from-store` reports the stored results for `OWNER` with no network and no
+clones. It keeps the newest commit per repository. That is how a report is
+regenerated after the source has gone.
+
+Repository failures are listed and do not stop the run. The report shows
+opportunities shared across repositories, as in the local scan.
 
 ### `reopen <ID>`
 

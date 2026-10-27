@@ -138,7 +138,7 @@
 - [x] Parallelism candidate detection (§13): per-item calls in range loops, literal-workload-size guard (MIN_WORKLOAD = 64)
 - [x] Unsafe-region detection and tagging on affected code (§54) — pre-pass tags findings inside `unsafe` blocks/fns
 - [x] Numerical-code recognition (§55) — float literals/casts/transcendental calls mark enclosing functions; `numerical_context` flag = faster ≠ equivalent risk
-- [ ] Group related low-level findings into aggregated opportunities (§58) — `Finding::group_key()` provided; aggregation lands with the opportunity engine (1.8)
+- [x] Group related low-level findings into aggregated opportunities (§58) — `Finding::group_key()` provided; aggregation done in the opportunity engine (1.8)
 - [x] Suppression comments / config ignores — `// tpt-profiler:ignore` / `// tpt-profiler:ignore-next`
 - [x] Unit tests per detector with positive and negative fixtures (28 tests)
 - [x] Regression corpus of known-detectable opportunities (§76) — `tests/corpus/*.rs` with `// expect:` markers, plus a clean file asserting zero false positives
@@ -263,11 +263,11 @@
 
 ### 2.3 Memory & allocation (`tpt-profiler-memory`, §8.4, §14)
 - [ ] Allocation count/size/frequency profiling
-- [ ] Peak RSS, heap usage, retained memory, working set
+- [~] Peak RSS (Linux, sampled from `/proc`, lower bound; `memory` command) ✓; heap usage, retained memory and working set not done
 - [ ] Temporary allocation and object-lifetime analysis
 - [ ] Fragmentation indicators
 - [ ] Integrations (e.g. heaptrack/dhat/valgrind where available)
-- [ ] Optional counting-allocator support
+- [ ] Optional counting-allocator support (needs a user-side `#[global_allocator]`; the library crates forbid `unsafe`)
 - [ ] Recommendations: reserve capacity, reuse buffers, compact representation
 - [ ] `memory` command
 
@@ -284,16 +284,16 @@
 - [ ] Recommendations: LTO, strip, feature reduction, consolidation
 
 ### 2.6 Compile-time analysis (`tpt-profiler-build`, §8.6, §20)
-- [ ] Clean build time
-- [ ] Incremental build time
-- [ ] Per-crate and dependency build time (`cargo --timings`)
-- [ ] Proc-macro and build-script cost
+- [x] Clean build time — `build` runs a clean `cargo build --workspace --timings` in `.tpt-profiler/build-target`
+- [x] Incremental build time — one workspace crate's source is touched (mtime only, restored afterwards) and rebuilt
+- [x] Per-crate and dependency build time (`cargo --timings` report, `UNIT_DATA`)
+- [x] Proc-macro and build-script cost — build scripts from the report; proc-macros from cargo metadata
 - [ ] Feature-combination cost
-- [ ] Build analysis report format (§20 example)
-- [ ] `build` command
+- [~] Build analysis report format (§20 example) — terminal table and findings, and `--format json` under the schema envelope; no Markdown output yet
+- [x] `build` command
 
 ### 2.7 Richer static detection
-- [~] I/O analysis (§16): repeated reads, small writes, sync I/O, repeated parsing — `io` detector covers loop-invariant `fs::read*`/`File::open`, per-iteration `flush`/`sync_*` (Medium) and `write_all` (Low, unbuffered). Repeated parsing not done
+- [x] I/O analysis (§16): repeated reads, small writes, sync I/O — `io` detector covers loop-invariant `fs::read*`/`File::open`, per-iteration `flush`/`sync_*` (Medium) and `write_all` (Low, unbuffered). Repeated parsing of loop-invariant input is covered by the serialisation detector
 - [x] Serialisation analysis (§17): JSON/XML/YAML/binary, repeated ser/de — `serialisation` detector covers serde_json, toml, serde_yaml, bincode, rmp_serde, ciborium, quick-xml and serde-xml-rs calls on loop-invariant input
 - [ ] Richer SIMD detection (§12), including image/audio/DSP/crypto kernels
 - [x] Algorithmic complexity heuristics — nested loops over the same collection (Low), `remove(0)`/`insert(0, …)` in loops (Low, receiver may be a map), sorting inside loops (Medium). Lookup-table and cache-aware analysis not yet
@@ -309,22 +309,22 @@
 - [x] Keep aggregate output readable at 300+ repos (top-N, grouping by category, shared-primitive detection)
 
 #### 2.8a GitHub clone → analyse → store → confirm-delete workflow
-- [ ] `ecosystem --github <user|org>`: list repos via `gh`/git (explicit opt-in; the network step is never implicit, §70)
-- [ ] Repo filters: skip non-Rust, forks, archived; include/exclude globs
-- [ ] Shallow-clone into a managed cache dir (configurable location)
-- [ ] Mark tool-created clones with a marker file
-- [ ] Analyse each clone, static-only by default
+- [x] `ecosystem --github <user|org>`: list repos via `gh`/git (explicit opt-in; the network step is never implicit, §70)
+- [x] Repo filters: skip non-Rust, forks, archived; include/exclude globs
+- [x] Shallow-clone into a managed cache dir (configurable location, `--cache-dir`)
+- [x] Mark tool-created clones with a marker file
+- [x] Analyse each clone, static-only by default
 - [ ] Runtime/bench on clones is opt-in only, sandboxed or confirmed (executes untrusted build.rs/benches)
-- [ ] Store results per repo, keyed by repo + commit SHA, in `.tpt-profiler/`, independent of the clone
-- [ ] Regenerate reports from stored results without the source present
-- [ ] Cleanup step: list clones with sizes, delete only on confirmation (interactive prompt; `--yes` / `--keep` for non-interactive)
-- [ ] Deletion safety: only tool-created clones, never user checkouts, refuse paths outside the managed cache dir
-- [ ] Batch processing with a configurable disk budget, so 300+ clones are never on disk at once
-- [ ] Resume after interruption: skip repos already analysed at the same SHA
-- [ ] Bounded parallelism, per-repo timeouts, partial-failure tolerance (one broken repo never aborts the run)
-- [ ] Auth: reuse the user's `gh`/git credentials, never store tokens; handle rate limits
-- [ ] Handle repos with no `Cargo.toml`, workspaces inside subdirectories, and name collisions
-- [ ] Tests with mocked `gh`/git and a fixture of small local repos
+- [x] Store results per repo, keyed by repo + commit SHA, in `.tpt-profiler/`, independent of the clone
+- [x] Regenerate reports from stored results without the source present (`--from-store`)
+- [~] Cleanup step: delete only on confirmation (interactive prompt; `--yes` / `--keep`) ✓; the prompt and report show clone count and total size, not a per-clone list
+- [x] Deletion safety: only tool-created clones, never user checkouts, refuse paths outside the managed cache dir
+- [x] Batch processing with a configurable disk budget (`--disk-budget-mb`); clones over budget are kept or deleted per the cleanup choice
+- [x] Resume after interruption: skip repos already analysed at the same SHA
+- [x] Bounded parallelism (`--workers`), per-repo network timeouts, partial-failure tolerance (one broken repo never aborts the run)
+- [x] Auth: reuse the user's `gh`/git credentials, never store tokens; rate-limit errors are reported with a rerun hint
+- [x] Handle repos with no `Cargo.toml`, workspaces inside subdirectories, and name collisions
+- [x] Tests with mocked `gh`/git and fixture directories (the fake host copies fixtures; no real `git` runs in tests)
 
 ### 2.9 Quality
 - [x] Incremental static analysis cache (§72) — per-file content hash in `.tpt-profiler/cache/`; reports identical with or without it
@@ -388,7 +388,7 @@
 - [x] Unsupported-dependency detection — resolved crates known to need an OS (rayon, mio, socket2, nix, tokio with OS features)
 - [ ] Allocation behaviour in WASM
 - [x] JS boundary crossing detection — `wasm_js_boundary`: calls inside loops
-- [~] WASM SIMD availability — flags native x86/AArch64 intrinsics outside a target gate; no `simd128` feature check
+- [~] WASM SIMD availability — flags native x86/AArch64 intrinsics outside a target gate, and `wasm32` intrinsics in a file that never names `simd128`; no check of `.cargo/config.toml` rustflags
 - [x] Native-only assumption detection — `wasm_native_only`: threads, files, processes, sockets outside a target `cfg`
 - [~] Recommendations (§21) — each WASM finding carries a recommendation; no separate report
 
@@ -398,7 +398,7 @@
 - [ ] GPU opportunity report
 
 ### 4.3 Energy (§56)
-- [ ] CPU/GPU energy counters (RAPL etc. where available)
+- [~] CPU/GPU energy counters (RAPL etc. where available) — CPU package energy per workload via Linux powercap (`energy` command); GPU not done
 - [ ] Performance-per-watt and energy-per-operation metrics
 - [ ] Energy as an impact dimension
 

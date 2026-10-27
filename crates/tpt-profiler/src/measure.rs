@@ -15,12 +15,14 @@ use tpt_profiler_model::{
     Confidence, Environment, FindingKind, Measurement, MeasurementSource, Unit, UnixSeconds,
     Workload, hierarchy::CrateInfo,
 };
+use tpt_profiler_runtime::energy;
+use tpt_profiler_runtime::memory;
 use tpt_profiler_runtime::perf::{self, Hotspot, Perf};
 use tpt_profiler_runtime::{
     Platform, RunnableWorkload, measure_workload, select_backend, to_measurements,
 };
 
-use crate::config::Config;
+use crate::config::{Config, WorkloadConfig};
 
 /// Upper bound for one `cargo bench` invocation (spec §8.3).
 const BENCH_TIMEOUT: Duration = Duration::from_secs(1800);
@@ -362,6 +364,193 @@ pub struct WorkloadOutcome {
     pub failed_runs: u32,
 }
 
+/// Builds the runnable form of a configured workload, resolving its command
+/// against `root` and applying its optional warm-up and timeout settings.
+fn runnable_for(root: &Path, workload: &WorkloadConfig) -> RunnableWorkload {
+    let mut runnable = RunnableWorkload::new(
+        Workload {
+            name: workload.name.clone(),
+            input: None,
+            duration_hint_ms: None,
+            repetitions: workload.repetitions,
+        },
+        root.join(&workload.command),
+    );
+    runnable.args.clone_from(&workload.args);
+    if let Some(warmup) = workload.warmup_runs {
+        runnable.warmup_runs = warmup;
+    }
+    if let Some(timeout_ms) = workload.timeout_ms {
+        runnable.timeout = Duration::from_millis(timeout_ms);
+    }
+    runnable
+}
+
+/// Peak resident memory of one workload run (spec §8.4, §14).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MemoryOutcome {
+    /// Workload name from `[[workloads]]`.
+    pub name: String,
+    /// Largest sampled resident set, in kilobytes; `None` when no poll
+    /// could read one (the child finished before the first sample).
+    pub peak_rss_kb: Option<u64>,
+    /// Whether the run failed or timed out. A failed run has no reading.
+    pub failed: bool,
+    /// The `memory:<name>_peak_rss_bytes` measurement, when there is a reading.
+    pub measurements: Vec<Measurement>,
+}
+
+/// Runs each configured workload once under a memory sampler and reports its
+/// peak resident memory (spec §8.4, §14). Runs regardless of `[profiling]`
+/// toggles, as an explicit command would.
+///
+/// # Errors
+/// Fails with a tool-unavailable error where the platform has no `/proc`
+/// sampling source, or when a workload cannot be spawned at all.
+pub fn collect_memory(
+    root: &Path,
+    config: &Config,
+    now: UnixSeconds,
+) -> Result<Vec<MemoryOutcome>, tpt_profiler_model::Error> {
+    if !memory::sampling_supported() {
+        return Err(ToolUnavailableError::Tool {
+            tool: String::from("/proc"),
+            hint: String::from("peak memory is sampled from Linux /proc; this platform has none"),
+        }
+        .into());
+    }
+    let mut outcomes = Vec::with_capacity(config.workloads.len());
+    for workload in &config.workloads {
+        let runnable = runnable_for(root, workload);
+        let mut command = Command::new(&runnable.program);
+        command.args(&runnable.args);
+        let sampled =
+            memory::run_sampled(&mut command, runnable.timeout, None).map_err(|error| {
+                ProfilingError::SpawnFailed {
+                    command: workload.command.clone(),
+                    message: error.to_string(),
+                }
+            })?;
+        let failed = !sampled.outcome.success || sampled.outcome.timed_out;
+        let measurements = match sampled.peak_rss_kb {
+            Some(kilobytes) if !failed => vec![Measurement {
+                metric: format!("memory:{}_peak_rss_bytes", workload.name),
+                value: kilobytes_as_f64(kilobytes) * 1024.0,
+                unit: Unit::Bytes,
+                source: MeasurementSource::ProcStatus,
+                timestamp: now,
+                workload: Some(workload.name.clone()),
+                environment: None,
+                confidence: Confidence::Low,
+                kind: FindingKind::Statistical,
+            }],
+            _ => Vec::new(),
+        };
+        outcomes.push(MemoryOutcome {
+            name: workload.name.clone(),
+            peak_rss_kb: sampled.peak_rss_kb,
+            failed,
+            measurements,
+        });
+    }
+    Ok(outcomes)
+}
+
+/// Package energy used while one workload ran once (spec §56).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnergyOutcome {
+    /// Workload name from `[[workloads]]`.
+    pub name: String,
+    /// Energy in joules; `None` when the counter could not be read.
+    pub joules: Option<f64>,
+    /// Whether the run failed or timed out, which makes the reading useless.
+    pub failed: bool,
+    /// The `energy:<name>_joules` measurement, when there is a reading.
+    pub measurements: Vec<Measurement>,
+}
+
+/// Runs each configured workload once between two package-energy readings
+/// (spec §56). The counter is system-wide, so the value includes any other
+/// load on the machine; the measurement is Low confidence for that reason.
+///
+/// # Errors
+/// Fails with a tool-unavailable error when no powercap zone is readable,
+/// or when a workload cannot be spawned at all.
+pub fn collect_energy(
+    root: &Path,
+    config: &Config,
+    now: UnixSeconds,
+) -> Result<Vec<EnergyOutcome>, tpt_profiler_model::Error> {
+    let powercap = Path::new(energy::POWERCAP_ROOT);
+    if energy::snapshot(powercap).is_none() {
+        return Err(ToolUnavailableError::Tool {
+            tool: String::from("powercap"),
+            hint: String::from(
+                "package energy needs readable Linux RAPL counters under /sys/class/powercap (often root-only)",
+            ),
+        }
+        .into());
+    }
+    let mut outcomes = Vec::with_capacity(config.workloads.len());
+    for workload in &config.workloads {
+        let runnable = runnable_for(root, workload);
+        let mut command = Command::new(&runnable.program);
+        command.args(&runnable.args);
+        let before = energy::snapshot(powercap);
+        let outcome = tpt_profiler_runtime::process::run(&mut command, runnable.timeout, None)
+            .map_err(|error| ProfilingError::SpawnFailed {
+                command: workload.command.clone(),
+                message: error.to_string(),
+            })?;
+        let after = energy::snapshot(powercap);
+        let failed = !outcome.success || outcome.timed_out;
+        let joules = match (before, after) {
+            (Some(before), Some(after)) if !failed => {
+                Some(microjoules_as_f64(energy::consumed_uj(&before, &after)) / 1_000_000.0)
+            }
+            _ => None,
+        };
+        let measurements = joules
+            .map(|joules| Measurement {
+                metric: format!("energy:{}_joules", workload.name),
+                value: joules,
+                unit: Unit::Joules,
+                source: MeasurementSource::Rapl,
+                timestamp: now,
+                workload: Some(workload.name.clone()),
+                environment: None,
+                confidence: Confidence::Low,
+                kind: FindingKind::Statistical,
+            })
+            .into_iter()
+            .collect();
+        outcomes.push(EnergyOutcome {
+            name: workload.name.clone(),
+            joules,
+            failed,
+            measurements,
+        });
+    }
+    Ok(outcomes)
+}
+
+/// Converts a microjoule count to `f64`. Counters are far below 2^53
+/// microjoules within one run, so the conversion is exact.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "per-run energy is far below 2^53 microjoules"
+)]
+fn microjoules_as_f64(microjoules: u64) -> f64 {
+    microjoules as f64
+}
+
+/// Converts a kilobyte count to `f64`. Resident sets are far below 2^53
+/// kilobytes, so the conversion is exact.
+#[allow(clippy::cast_precision_loss)]
+fn kilobytes_as_f64(kilobytes: u64) -> f64 {
+    kilobytes as f64
+}
+
 /// Runs every configured workload when `[profiling] runtime` is enabled
 /// (spec §8.2). Returns an empty list when runtime profiling is off or no
 /// workloads are configured.
@@ -383,22 +572,7 @@ pub fn collect_runtime(
     }
     let mut outcomes = Vec::with_capacity(config.workloads.len());
     for workload in &config.workloads {
-        let mut runnable = RunnableWorkload::new(
-            Workload {
-                name: workload.name.clone(),
-                input: None,
-                duration_hint_ms: None,
-                repetitions: workload.repetitions,
-            },
-            root.join(&workload.command),
-        );
-        runnable.args.clone_from(&workload.args);
-        if let Some(warmup) = workload.warmup_runs {
-            runnable.warmup_runs = warmup;
-        }
-        if let Some(timeout_ms) = workload.timeout_ms {
-            runnable.timeout = Duration::from_millis(timeout_ms);
-        }
+        let runnable = runnable_for(root, workload);
         let result = measure_workload(&runnable, None)?;
         let measurements = to_measurements(
             &result,

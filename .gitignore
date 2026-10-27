@@ -4,6 +4,8 @@
 
 # Profiler runtime artefacts (keep baselines opt-in)
 **/.tpt-profiler/cache/
+**/.tpt-profiler/build-target/
+**/.tpt-profiler/clones/
 /.tpt-profiler/tmp/
 
 # Profiling outputs

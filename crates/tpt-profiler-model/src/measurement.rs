@@ -34,6 +34,12 @@ pub enum MeasurementSource {
     BinarySize,
     /// Build timings (spec §20).
     BuildTiming,
+    /// Resident-memory high-water mark sampled from `/proc` while a child
+    /// ran (spec §8.4, §14). A lower bound; see the runtime memory module.
+    ProcStatus,
+    /// Package energy counter (Linux RAPL via `/sys/class/powercap`, spec §56).
+    /// System-wide, so it includes everything else running at the time.
+    Rapl,
     /// Derived by static analysis (never a runtime fact; spec §75).
     Static,
     /// Any other provider (spec §68: external tools are evidence

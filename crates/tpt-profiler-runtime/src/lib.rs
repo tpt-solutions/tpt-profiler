@@ -5,7 +5,9 @@
 //! Statistical rigour (repeats, warm-up, outliers, confidence) is
 //! mandatory: a single execution is never definitive.
 
+pub mod energy;
 pub mod measure;
+pub mod memory;
 pub mod perf;
 pub mod process;
 pub mod provider;

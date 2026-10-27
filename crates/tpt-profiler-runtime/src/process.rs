@@ -59,6 +59,22 @@ pub fn run(
     timeout: Duration,
     cancel: Option<&CancelToken>,
 ) -> std::io::Result<RunOutcome> {
+    run_observed(command, timeout, cancel, &mut |_| {})
+}
+
+/// Like [`run`], but calls `observe` with the child's process id on every
+/// poll while it runs (about every 10 ms). Used to sample the child from
+/// outside, for example its resident memory (spec §14). The observer is not
+/// called after the child has finished, so it sees only live processes.
+///
+/// # Errors
+/// Fails when the command cannot be spawned.
+pub fn run_observed(
+    command: &mut Command,
+    timeout: Duration,
+    cancel: Option<&CancelToken>,
+    observe: &mut dyn FnMut(u32),
+) -> std::io::Result<RunOutcome> {
     let child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -107,6 +123,7 @@ pub fn run(
                 cancelled: false,
             });
         }
+        observe(child.child.id());
         std::thread::sleep(POLL_INTERVAL);
     }
 }

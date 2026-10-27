@@ -4,6 +4,9 @@
 //!   used outside a `cfg` gate, which do not exist on `wasm32`;
 //! * **JS boundary crossings**: `wasm-bindgen`, `js-sys` and `web-sys`
 //!   calls made inside a loop, where each call crosses into JavaScript.
+//! * **SIMD availability**: native intrinsics outside a target gate, and
+//!   `wasm32` SIMD intrinsics in a file that never names `simd128`, so the
+//!   feature is probably not enabled where those intrinsics are compiled.
 //!
 //! The target is not known to a source scan, so native-only findings are
 //! Low confidence. Any item carrying a `cfg` that names a target is treated
@@ -131,8 +134,29 @@ impl Analyzer for SimdIntrinsicDetector {
         let mut visitor = IntrinsicVisitor {
             flagged_lines: HashSet::new(),
             findings: Vec::new(),
+            wasm32_use: None,
         };
         visitor.visit_file(file);
+        // Attributes and `cfg` arguments are tokens, so this sees
+        // `target_feature(enable = "simd128")` and comments are excluded.
+        let mentions_simd128 = quote::ToTokens::to_token_stream(file)
+            .to_string()
+            .contains("simd128");
+        if !mentions_simd128 {
+            if let Some((line, rendered)) = visitor.wasm32_use.take() {
+                visitor.findings.push(Finding::new(
+                    "wasm_simd_intrinsics",
+                    Category::Wasm,
+                    format!(
+                        "`{rendered}` is a wasm32 SIMD intrinsic, but this file never names \
+                         `simd128`; enable it with `#[target_feature(enable = \"simd128\")]` or \
+                         build with `-C target-feature=+simd128` (spec §21)"
+                    ),
+                    SourceLocation::at_line(String::new(), line),
+                    Confidence::Low,
+                ));
+            }
+        }
         for finding in &mut visitor.findings {
             finding.location.file.clone_from(&context.file);
         }
@@ -145,6 +169,8 @@ struct IntrinsicVisitor {
     /// One finding per line, however many paths the line names.
     flagged_lines: HashSet<u32>,
     findings: Vec<Finding>,
+    /// The first `arch::wasm32` path seen, with its line.
+    wasm32_use: Option<(u32, String)>,
 }
 
 impl<'ast> Visit<'ast> for IntrinsicVisitor {
@@ -168,6 +194,9 @@ impl<'ast> Visit<'ast> for IntrinsicVisitor {
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
         let rendered = render(path);
+        if rendered.contains("arch::wasm32") && self.wasm32_use.is_none() {
+            self.wasm32_use = Some((line_of(path), rendered.clone()));
+        }
         if rendered.contains("arch::x86") || rendered.contains("arch::aarch64") {
             let line = line_of(path);
             if self.flagged_lines.insert(line) {
@@ -175,7 +204,7 @@ impl<'ast> Visit<'ast> for IntrinsicVisitor {
                     "wasm_simd_intrinsics",
                     Category::Wasm,
                     format!(
-                        "`{rendered}` is a native SIMD intrinsic; wasm32 needs its own                          `simd128` code or a portable fallback behind `cfg` (spec §21)"
+                        "`{rendered}` is a native SIMD intrinsic; wasm32 needs its own `simd128` code or a portable fallback behind `cfg` (spec §21)"
                     ),
                     SourceLocation::at_line(String::new(), line),
                     Confidence::Low,
@@ -310,6 +339,29 @@ fn add(a: u32, b: u32) -> u32 {
 ";
         let findings = wasm_findings(source, "wasm_simd_intrinsics");
         assert_eq!(findings.len(), 1, "{findings:?}");
+    }
+
+    #[test]
+    fn wasm32_intrinsics_without_simd128_are_flagged() {
+        let source = r"
+fn add(a: v128, b: v128) -> v128 {
+    core::arch::wasm32::u32x4_add(a, b)
+}
+";
+        let findings = wasm_findings(source, "wasm_simd_intrinsics");
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].description.contains("simd128"));
+    }
+
+    #[test]
+    fn wasm32_intrinsics_with_simd128_enabled_are_not_flagged() {
+        let source = r#"
+#[target_feature(enable = "simd128")]
+fn add(a: v128, b: v128) -> v128 {
+    core::arch::wasm32::u32x4_add(a, b)
+}
+"#;
+        assert!(wasm_findings(source, "wasm_simd_intrinsics").is_empty());
     }
 
     #[test]

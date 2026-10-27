@@ -25,6 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   static engines via `StaticEngine::register`), a runnable example, and a
   `std` feature forwarded to the model crate.
 * Versioned JSON output (schema version 1) and Markdown output.
+* `build` command (spec §8.6, §20): clean and incremental workspace build
+  times, a per-crate cost table split into library, build-script and
+  proc-macro work, and low-confidence findings where compile cost
+  concentrates. Builds run in `.tpt-profiler/build-target`.
+* WASM SIMD availability: `wasm32` SIMD intrinsics in a file that never names
+  `simd128` are flagged (spec §21).
+* `ecosystem --github OWNER`: lists an owner's repositories with `gh`, filters
+  forks, archived and non-Rust repositories (with include and exclude globs),
+  shallow-clones the rest in disk-budgeted batches, analyses and stores each
+  result per commit under `.tpt-profiler/github/`, and asks before deleting
+  clones it created. `--from-store` reports stored results with no network.
+  Resumes from stored results at the same commit.
+* `memory` command: peak resident memory of each workload, sampled from
+  `/proc` on Linux (spec §8.4, §14). A lower bound, Low confidence.
+* `energy` command: package energy of each workload from the Linux RAPL
+  counters (spec §56). System-wide and noisy, Low confidence.
 * Documentation: CLI, configuration, and JSON schema references under `docs/`.
 * Persistent opportunity tracking with a lifecycle (`start`, `optimise`,
   `validate`, `regress`, `supersede`, `dismiss`, `accept`, `snooze`, `reopen`).

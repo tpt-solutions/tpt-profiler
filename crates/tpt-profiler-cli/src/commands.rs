@@ -369,6 +369,240 @@ pub fn ecosystem(
     context.emit(&text)
 }
 
+/// Options for `ecosystem --github` (spec §70, Phase 2.8a).
+pub struct GithubArgs {
+    /// Owner whose repositories are listed.
+    pub owner: String,
+    /// Include globs; empty means every Rust repository.
+    pub include: Vec<String>,
+    /// Exclude globs.
+    pub exclude: Vec<String>,
+    /// Most repositories to clone after filtering.
+    pub max_repos: usize,
+    /// Most kilobytes of clones on disk at once.
+    pub disk_budget_kb: u64,
+    /// Clone directory; the default is under `.tpt-profiler/`.
+    pub cache_dir: Option<PathBuf>,
+    /// Cleanup policy from `--yes` / `--keep`, or `Ask` by default.
+    pub cleanup: tpt_profiler::github::CleanupPolicy,
+    /// Report stored results only, with no network.
+    pub from_store: bool,
+    /// Score bonus per extra repository sharing an opportunity.
+    pub shared_weight: f64,
+    /// Rows shown in each table.
+    pub top: usize,
+}
+
+/// `ecosystem --github OWNER` — lists, clones, analyses and stores an
+/// owner's Rust repositories, then reports across them (spec §33, §34, §70).
+pub fn ecosystem_github(context: &Context, args: &GithubArgs) -> CommandResult {
+    use std::io::IsTerminal as _;
+    use tpt_profiler::github::{
+        self, CleanupPolicy, GitHost, GithubOptions, GithubRun, RepoFilter,
+    };
+
+    let run = if args.from_store {
+        let mut repos = github::load_owner_results(&context.path, &args.owner)?;
+        // Keep the newest stored commit per repository; older ones are history.
+        repos.sort_by(|a, b| {
+            a.name_with_owner
+                .cmp(&b.name_with_owner)
+                .then(b.analysed_at.cmp(&a.analysed_at))
+        });
+        repos.dedup_by(|a, b| a.name_with_owner == b.name_with_owner);
+        GithubRun {
+            repos,
+            ..GithubRun::default()
+        }
+    } else {
+        let interactive = std::io::stdin().is_terminal();
+        let cleanup = match args.cleanup {
+            CleanupPolicy::Ask if !interactive => CleanupPolicy::Keep,
+            other => other,
+        };
+        let cache_root = args.cache_dir.clone().unwrap_or_else(|| {
+            context
+                .path
+                .join(tpt_profiler::baseline::STATE_DIR)
+                .join(github::CLONE_DIR)
+        });
+        let options = GithubOptions {
+            owner: args.owner.clone(),
+            filter: RepoFilter {
+                include: args.include.clone(),
+                exclude: args.exclude.clone(),
+            },
+            max_repos: args.max_repos,
+            store_root: context.path.clone(),
+            cache_root,
+            disk_budget_kb: args.disk_budget_kb,
+            workers: tpt_profiler::ecosystem::default_workers(),
+            cleanup,
+            confirm: &confirm_delete,
+        };
+        github::run(&GitHost, &options).map_err(Error::Message)?
+    };
+
+    let findings = run.repos.iter().map(|repo| {
+        let opportunities = match &repo.outcome {
+            github::Outcome::Analysed { opportunities } => opportunities
+                .iter()
+                .map(|o| (o.category.clone(), o.description.clone(), o.priority))
+                .collect(),
+            github::Outcome::NoManifest => Vec::new(),
+        };
+        (repo.name_with_owner.clone(), opportunities)
+    });
+    let shared = tpt_profiler::ecosystem::shared_from(findings, args.shared_weight);
+
+    if context.format == Format::Json {
+        let payload = serde_json::json!({
+            "owner": args.owner,
+            "repositories": run.repos,
+            "skipped": run
+                .skipped
+                .iter()
+                .map(|(name, reason)| serde_json::json!({
+                    "repository": name,
+                    "reason": reason.label(),
+                }))
+                .collect::<Vec<_>>(),
+            "failures": run
+                .failures
+                .iter()
+                .map(|(name, error)| serde_json::json!({
+                    "repository": name,
+                    "error": error,
+                }))
+                .collect::<Vec<_>>(),
+            "resumed": run.resumed,
+            "stopped_early": run.stopped_early,
+            "shared": shared,
+        });
+        let envelope = SchemaEnvelope::new(generated_by(), payload);
+        let json = serde_json::to_string_pretty(&envelope)
+            .map_err(|error| Error::Message(error.to_string()))?;
+        return context.emit(&json);
+    }
+    context.emit(&render_github(&args.owner, &run, &shared, args.top))
+}
+
+/// Asks before deleting clones. Reads one line from stdin; anything other
+/// than `y` or `yes` keeps them.
+fn confirm_delete(count: usize, kilobytes: u64) -> bool {
+    use std::io::Write as _;
+    eprint!(
+        "Delete {count} clone(s) using {} MB? [y/N] ",
+        kilobytes / 1024
+    );
+    let _ = std::io::stderr().flush();
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    matches!(answer.trim(), "y" | "Y" | "yes" | "YES")
+}
+
+/// Terminal view of a GitHub run: what was analysed, skipped and failed,
+/// what the clones cost, and what is shared across the repositories.
+fn render_github(
+    owner: &str,
+    run: &tpt_profiler::github::GithubRun,
+    shared: &[tpt_profiler::ecosystem::SharedOpportunity],
+    top: usize,
+) -> String {
+    use std::fmt::Write as _;
+    use tpt_profiler::github::Outcome;
+
+    let analysed = run
+        .repos
+        .iter()
+        .filter(|repo| matches!(repo.outcome, Outcome::Analysed { .. }))
+        .count();
+    let mut text = String::new();
+    let _ = writeln!(
+        text,
+        "GitHub owner `{owner}`: {} stored result(s), {analysed} analysed, {} reused from the store, {} skipped, {} failed",
+        run.repos.len(),
+        run.resumed,
+        run.skipped.len(),
+        run.failures.len(),
+    );
+
+    if !run.repos.is_empty() {
+        let _ = writeln!(
+            text,
+            "\nRepositories (commit, opportunities, top priority):"
+        );
+        for repo in &run.repos {
+            let (count, top_priority) = match &repo.outcome {
+                Outcome::Analysed { opportunities } => (
+                    opportunities.len().to_string(),
+                    opportunities
+                        .iter()
+                        .filter_map(|o| o.priority)
+                        .max()
+                        .map_or_else(|| String::from("-"), |p| p.to_string()),
+                ),
+                Outcome::NoManifest => (String::from("no Cargo.toml"), String::from("-")),
+            };
+            let short: String = repo.commit.chars().take(10).collect();
+            let _ = writeln!(
+                text,
+                "  {:<40} {short}  {count:>14}  {top_priority:>3}",
+                repo.name_with_owner
+            );
+        }
+    }
+
+    if !run.failures.is_empty() {
+        let _ = writeln!(text, "\nFailed (not stored; retried next run):");
+        for (name, error) in &run.failures {
+            let _ = writeln!(text, "  {name}: {error}");
+        }
+    }
+
+    if !run.skipped.is_empty() {
+        let mut reasons: BTreeMap<&str, usize> = BTreeMap::new();
+        for (_, reason) in &run.skipped {
+            *reasons.entry(reason.label()).or_default() += 1;
+        }
+        let summary: Vec<String> = reasons
+            .iter()
+            .map(|(reason, count)| format!("{count} {reason}"))
+            .collect();
+        let _ = writeln!(text, "\nSkipped: {}", summary.join(", "));
+    }
+
+    if !shared.is_empty() {
+        let _ = writeln!(text, "\nShared across repositories (top {top}):");
+        for entry in shared.iter().take(top) {
+            let _ = writeln!(
+                text,
+                "  [{}] {} in {} repositories: {}",
+                entry.category,
+                entry.description,
+                entry.repositories.len(),
+                entry.suggestion
+            );
+        }
+    }
+
+    if let Some(reason) = &run.stopped_early {
+        let _ = writeln!(text, "\nStopped early: {reason}");
+    }
+    if !run.remaining_clones.is_empty() {
+        let kilobytes: u64 = run.remaining_clones.iter().map(|(_, size)| size).sum();
+        let _ = writeln!(
+            text,
+            "\n{} clone(s) kept on disk ({} MB); delete them with --yes on a later run",
+            run.remaining_clones.len(),
+            kilobytes / 1024
+        );
+    }
+    text.trim_end().to_owned()
+}
+
 /// The terminal view of an ecosystem scan: repositories by priority, the failures,
 /// and shared opportunities with suggestions and a per-category count.
 fn render_ecosystem(scan: &tpt_profiler::ecosystem::EcosystemReport, top: usize) -> String {
@@ -481,6 +715,244 @@ fn truncate(text: &str, max: usize) -> String {
     }
     let kept: String = text.chars().take(max.saturating_sub(1)).collect();
     format!("{kept}…")
+}
+
+/// One unit kind's share of compile time, for the JSON build report.
+fn build_kind_json(
+    summary: &tpt_profiler_build::BuildSummary,
+    kind: tpt_profiler_build::UnitKind,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": kind.label(),
+        "seconds": summary.share_of(kind) * summary.unit_seconds,
+        "share": summary.share_of(kind),
+    })
+}
+
+/// Kilobytes as megabytes for display. Resident sets are far below 2^53
+/// kilobytes, so the conversion is exact.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "resident sets are far below 2^53 kilobytes"
+)]
+fn megabytes(kilobytes: u64) -> f64 {
+    kilobytes as f64 / 1024.0
+}
+
+/// `memory` — peak resident memory of each configured workload (spec §8.4,
+/// §14). One run per workload, sampled from `/proc`; Linux only.
+pub fn memory(context: &Context) -> CommandResult {
+    use std::fmt::Write as _;
+
+    let config = context.load_config()?;
+    if config.workloads.is_empty() {
+        return context.emit("no workloads configured; add [[workloads]] to tpt-profiler.toml");
+    }
+    let outcomes = match tpt_profiler::measure::collect_memory(&context.path, &config, now_unix()) {
+        Ok(outcomes) => outcomes,
+        Err(tpt_profiler_model::Error::ToolUnavailable(error)) => {
+            return context.emit(&format!("peak memory unavailable: {error}"));
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    if context.format == Format::Json {
+        let payload: Vec<serde_json::Value> = outcomes
+            .iter()
+            .map(|outcome| {
+                serde_json::json!({
+                    "workload": outcome.name,
+                    "peak_rss_bytes": outcome.peak_rss_kb.map(|kb| kb.saturating_mul(1024)),
+                    "failed": outcome.failed,
+                    "measurements": outcome.measurements,
+                })
+            })
+            .collect();
+        let envelope = SchemaEnvelope::new(generated_by(), payload);
+        let json = serde_json::to_string_pretty(&envelope)
+            .map_err(|error| Error::Message(error.to_string()))?;
+        return context.emit(&json);
+    }
+
+    let mut text = String::new();
+    for outcome in &outcomes {
+        let _ = match (outcome.failed, outcome.peak_rss_kb) {
+            (true, _) => writeln!(text, "{}: failed or timed out; no reading", outcome.name),
+            (false, None) => writeln!(
+                text,
+                "{}: no reading; the workload finished before the first sample",
+                outcome.name
+            ),
+            (false, Some(kilobytes)) => writeln!(
+                text,
+                "{}: peak resident memory {:.1} MB (sampled, lower bound)",
+                outcome.name,
+                megabytes(kilobytes)
+            ),
+        };
+    }
+    let _ = write!(
+        text,
+        "Sampled from /proc every few milliseconds, one run per workload: Low confidence."
+    );
+    context.emit(&text)
+}
+
+/// `energy` — package energy used by each configured workload run (spec §56).
+pub fn energy(context: &Context) -> CommandResult {
+    use std::fmt::Write as _;
+
+    let config = context.load_config()?;
+    if config.workloads.is_empty() {
+        return context.emit("no workloads configured; add [[workloads]] to tpt-profiler.toml");
+    }
+    let outcomes = match tpt_profiler::measure::collect_energy(&context.path, &config, now_unix()) {
+        Ok(outcomes) => outcomes,
+        Err(tpt_profiler_model::Error::ToolUnavailable(error)) => {
+            return context.emit(&format!("package energy unavailable: {error}"));
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    if context.format == Format::Json {
+        let payload: Vec<serde_json::Value> = outcomes
+            .iter()
+            .map(|outcome| {
+                serde_json::json!({
+                    "workload": outcome.name,
+                    "joules": outcome.joules,
+                    "failed": outcome.failed,
+                    "measurements": outcome.measurements,
+                })
+            })
+            .collect();
+        let envelope = SchemaEnvelope::new(generated_by(), payload);
+        let json = serde_json::to_string_pretty(&envelope)
+            .map_err(|error| Error::Message(error.to_string()))?;
+        return context.emit(&json);
+    }
+
+    let mut text = String::new();
+    for outcome in &outcomes {
+        let _ = match (outcome.failed, outcome.joules) {
+            (true, _) => writeln!(text, "{}: failed or timed out; no reading", outcome.name),
+            (false, None) => writeln!(text, "{}: no reading", outcome.name),
+            (false, Some(joules)) => writeln!(
+                text,
+                "{}: {joules:.3} J (system-wide package energy, one run)",
+                outcome.name
+            ),
+        };
+    }
+    let _ = write!(
+        text,
+        "The counter is system-wide, so other load on the machine is included: Low confidence."
+    );
+    context.emit(&text)
+}
+
+/// `build` — clean and incremental build times and where compile cost sits
+/// (spec §8.6, §20). Runs two `cargo build`s in a tool-owned target directory.
+pub fn build(context: &Context) -> CommandResult {
+    use std::fmt::Write as _;
+
+    let outcome = match tpt_profiler::build_time::measure_builds(&context.path, now_unix()) {
+        Ok(outcome) => outcome,
+        Err(tpt_profiler_model::Error::ToolUnavailable(error)) => {
+            return context.emit(&format!("build timing unavailable: {error}"));
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if context.format == Format::Json {
+        let payload = serde_json::json!({
+            "clean_seconds": outcome.clean_seconds,
+            "incremental_seconds": outcome.incremental_seconds,
+            "touched_crate": outcome.touched_crate,
+            "unit_seconds": outcome.summary.unit_seconds,
+            "kinds": [
+                build_kind_json(&outcome.summary, tpt_profiler_build::UnitKind::Library),
+                build_kind_json(&outcome.summary, tpt_profiler_build::UnitKind::BuildScript),
+                build_kind_json(&outcome.summary, tpt_profiler_build::UnitKind::ProcMacro),
+            ],
+            "crates": outcome.summary.crates.iter().map(|crate_cost| serde_json::json!({
+                "name": crate_cost.name,
+                "version": crate_cost.version,
+                "kind": crate_cost.kind.label(),
+                "seconds": crate_cost.seconds,
+                "share": crate_cost.share,
+            })).collect::<Vec<_>>(),
+            "findings": outcome.findings.iter().map(|finding| serde_json::json!({
+                "subject": finding.subject,
+                "description": finding.description,
+                "confidence": finding.confidence.to_string(),
+            })).collect::<Vec<_>>(),
+            "measurements": outcome.measurements,
+        });
+        let envelope = SchemaEnvelope::new(generated_by(), payload);
+        let json = serde_json::to_string_pretty(&envelope)
+            .map_err(|error| Error::Message(error.to_string()))?;
+        return context.emit(&json);
+    }
+    let summary = &outcome.summary;
+    let mut text = String::new();
+    let _ = writeln!(text, "Clean build:       {:.1}s", outcome.clean_seconds);
+    match (outcome.incremental_seconds, &outcome.touched_crate) {
+        (Some(seconds), Some(name)) => {
+            let _ = writeln!(text, "Incremental build: {seconds:.1}s (touched `{name}`)");
+        }
+        _ => {
+            let _ = writeln!(
+                text,
+                "Incremental build: not measured (no workspace crate to touch)"
+            );
+        }
+    }
+    let _ = writeln!(
+        text,
+        "
+Compile-unit time: {:.1}s summed over parallel jobs",
+        summary.unit_seconds
+    );
+    for kind in [
+        tpt_profiler_build::UnitKind::Library,
+        tpt_profiler_build::UnitKind::BuildScript,
+        tpt_profiler_build::UnitKind::ProcMacro,
+    ] {
+        let _ = writeln!(
+            text,
+            "  {:<13} {:>8.1}s {:>5.1}%",
+            kind.label(),
+            summary.share_of(kind) * summary.unit_seconds,
+            summary.share_of(kind) * 100.0
+        );
+    }
+    let _ = writeln!(
+        text,
+        "
+Top crates:"
+    );
+    for crate_cost in summary.crates.iter().take(10) {
+        let _ = writeln!(
+            text,
+            "  {:<28} {:<12} {:>8.1}s {:>5.1}%  {}",
+            crate_cost.name,
+            crate_cost.version,
+            crate_cost.seconds,
+            crate_cost.share * 100.0,
+            crate_cost.kind.label()
+        );
+    }
+    if !outcome.findings.is_empty() {
+        let _ = writeln!(
+            text,
+            "
+Findings (low confidence: one timed build each):"
+        );
+        for finding in &outcome.findings {
+            let _ = writeln!(text, "  - {}", finding.description);
+        }
+    }
+    context.emit(text.trim_end())
 }
 
 /// `effectiveness` — decisions and outcomes per category (spec §52, §65,
